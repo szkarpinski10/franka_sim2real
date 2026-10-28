@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+
+# MuJoCo – pliki generowane
+franka_mujoco/MUJOCO_LOG.TXT
+franka_mujoco/mjmodel.mjb
+
+# stare modele (1.5 GB) – zostają na dysku, nie w repo
+franka_mujoco/stack/
+
+# z nowych modeli w repo tylko wyeksportowane policy.pt (bez checkpointów i logów treningu)
+franka_mujoco/nowe_policy/*/*
+!franka_mujoco/nowe_policy/*/exported/
+franka_mujoco/nowe_policy/*/exported/*
+!franka_mujoco/nowe_policy/*/exported/policy.pt
+
+# stara kopia kodu z Isaaca (aktualna wersja jest w repo sk_isaac)
+franka_mujoco/src/
+franka_mujoco/scripts/

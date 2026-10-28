@@ -1,0 +1,21 @@
+POMIARY I SPRAWDZENIA – wypełnić w szkole
+
+Tagi (bok CZARNEGO kwadratu, suwmiarką):
+  tagi na kostkach (ID 0-17):  35 mm (sprawdzić suwmiarką)     (niebieska 0-5, czerwona 6-11, zielona 12-17; na górze: 0 / 6 / 12)
+  ID 20 (kalibracja):           70 mm (sprawdzić suwmiarką)
+  -> wpisać do CUBE_TAG i CALIB_TAG (podglad_tagow.py) oraz CALIB_SIZE (zbierz_handeye.py)
+
+Kamera (wynik profiles.py):
+  model: ________   USB: ____   tryb koloru, który działa: ________
+
+Stół:
+  środek podstawy robota -> krawędź stołu za robotem: ____ cm   (_TABLE_EDGE_BEHIND_BASE, teraz 17.5)
+  blat na wysokości podstawy robota? ____
+
+Robot:
+  wersja systemu w Desk: ________
+  jądro RT (uname -a, PREEMPT_RT?): ____
+  panda_py zainstalowane / wersja: ________
+  w HOME:  get_position() = ________   get_orientation() = ________   (oczekiwane ok. x 0.3, z 0.4-0.5; kwaternion x,y,z,w)
+  get_state().robot_mode = ________
+  dwa obiekty libfranka.Gripper(IP) naraz działają? ____
