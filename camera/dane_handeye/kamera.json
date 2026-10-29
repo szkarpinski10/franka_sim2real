@@ -1,0 +1,18 @@
+{
+  "width": 1280,
+  "height": 720,
+  "fx": 911.063232421875,
+  "fy": 910.9981689453125,
+  "cx": 630.3013305664062,
+  "cy": 381.173095703125,
+  "model": "distortion.inverse_brown_conrady",
+  "coeffs": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "calib_tag_id": 20,
+  "calib_tag_size": 0.07
+}

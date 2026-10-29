@@ -47,6 +47,18 @@ if EXPOSURE is not None:
     sensor.set_option(rs.option.enable_auto_exposure, 0)
     sensor.set_option(rs.option.exposure, EXPOSURE)
 
+def stan_robota():
+    """Świeży stan robota: (poza TCP 4 x 4, q, dq).
+    Po przerwaniu trybu nauczania (np. wciśnięty stop) panda.get_state()/get_pose() oddają ciągle ten sam stary stan,
+    więc gdy żadna pętla sterowania nie działa, czytamy prosto z libfranka (read_once)."""
+    try:
+        s = panda.get_robot().read_once()                    # działa tylko, gdy nie działa pętla sterowania
+        return np.array(s.O_T_EE).reshape(4, 4).T, np.array(s.q), np.array(s.dq)
+    except Exception:                                        # tryb nauczania działa -> stan z jego pętli jest aktualny
+        s = panda.get_state()
+        return np.array(panda.get_pose()), np.array(s.q), np.array(s.dq)
+
+
 os.makedirs(OUT_DIR, exist_ok=True)
 with open(os.path.join(OUT_DIR, "kamera.json"), "w") as f:
     json.dump({"width": W, "height": H, "fx": intr.fx, "fy": intr.fy, "cx": intr.ppx, "cy": intr.ppy,
@@ -86,14 +98,18 @@ try:
             if not tag:
                 print("Tag niewidoczny – ustaw robota tak, żeby tag był w kadrze.")
                 continue
-            dq = np.abs(np.array(panda.get_state().dq)).max()
-            if dq > 0.01:                                    # zdjęcie i poza muszą być z tej samej chwili
-                print(f"Robot jeszcze się rusza ({dq:.3f} rad/s) – poczekaj, aż stanie.")
+            T_tcp, q, dq = stan_robota()
+            if np.abs(dq).max() > 0.01:                      # zdjęcie i poza muszą być z tej samej chwili
+                print(f"Robot jeszcze się rusza ({np.abs(dq).max():.3f} rad/s) – poczekaj, aż stanie.")
+                continue
+            if q_joints and np.abs(q - q_joints[-1]).max() < 1e-4:
+                print("NIE ZAPISANO: pozycja robota taka sama jak przy poprzednim zdjęciu. Przesuń robota; "
+                      "jeśli przesunąłeś, a to się powtarza – robot nie podaje nowej pozycji (zakończ q i uruchom od nowa).")
                 continue
             i = len(T_base_tcp)
             cv2.imwrite(os.path.join(OUT_DIR, f"zdjecie_{i:02d}.png"), img)
-            T_base_tcp.append(np.array(panda.get_pose()))   # poza TCP w układzie bazy (4 x 4)
-            q_joints.append(np.array(panda.get_state().q))
+            T_base_tcp.append(T_tcp)                         # poza TCP w układzie bazy (4 x 4)
+            q_joints.append(q)
             R_cam_tag.append(tag[0].pose_R)
             t_cam_tag.append(tag[0].pose_t.flatten())
             np.savez(os.path.join(OUT_DIR, "pozy.npz"), T_base_tcp=np.array(T_base_tcp), q=np.array(q_joints),

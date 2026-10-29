@@ -1,21 +1,38 @@
 POMIARY I SPRAWDZENIA – wypełnić w szkole
 
 Tagi (bok CZARNEGO kwadratu, suwmiarką):
-  tagi na kostkach (ID 0-17):  35 mm (sprawdzić suwmiarką)     (niebieska 0-5, czerwona 6-11, zielona 12-17; na górze: 0 / 6 / 12)
-  ID 20 (kalibracja):           70 mm (sprawdzić suwmiarką)
-  -> wpisać do CUBE_TAG i CALIB_TAG (podglad_tagow.py) oraz CALIB_SIZE (zbierz_handeye.py)
+  tagi na kostkach (ID 0-17):  35 mm     (niebieska 0-5, czerwona 6-11, zielona 12-17; na górze: 0 / 6 / 12)
+  ID 20 (kalibracja):           70 mm
+  -> wpisane w CUBE_TAG i CALIB_TAG (podglad_tagow.py), CALIB_SIZE (zbierz_handeye.py), CUBE_TAG (kamera_kostki.py)
 
 Kamera (wynik profiles.py):
-  model: ________   USB: ____   tryb koloru, który działa: ________
+  model: RealSense D435I (firmware 5.13.0.55)   USB: 3 (5000M; na złym kablu/porcie było 2.1 i kamera się rozłączała)
+  tryb koloru, który działa: 1280 x 720 @ 30 (podgląd z wykrywaniem tagów ok. 10 kl/s)
+  tagi 0 / 6 / 12 wykrywane z ok. 35 cm, pewność m = 59-66
 
 Stół:
   środek podstawy robota -> krawędź stołu za robotem: ____ cm   (_TABLE_EDGE_BEHIND_BASE, teraz 17.5)
-  blat na wysokości podstawy robota? ____
+  blat na wysokości podstawy robota? ____   (wyjdzie też z kalibruj_handeye.py: z tagu 20)
 
-Robot:
-  wersja systemu w Desk: ________
-  jądro RT (uname -a, PREEMPT_RT?): ____
-  panda_py zainstalowane / wersja: ________
-  w HOME:  get_position() = ________   get_orientation() = ________   (oczekiwane ok. x 0.3, z 0.4-0.5; kwaternion x,y,z,w)
-  get_state().robot_mode = ________
-  dwa obiekty libfranka.Gripper(IP) naraz działają? ____
+Robot (2026-10-29):
+  wersja systemu w Desk: 4.2.2  -> libfranka 0.9.x
+  jądro RT: 6.8.1-1062-realtime, PREEMPT_RT – tak
+  panda_py: 1.1.1+libfranka.0.9.2 (cp312, z GitHub Releases) + requests; działa z numpy 2.5.4
+  laptop: 172.16.0.3/24 (połączenie nmcli "franka"), robot 172.16.0.2, ping 0.3 ms
+  TCP = kołnierz + 10.34 cm (F_T_EE z = 0.1034) – tak
+  get_orientation(): kwaternion x, y, z, w – tak (chwytak w dół -> x ≈ 1, w ≈ 0)
+  get_state().robot_mode = RobotMode.kIdle   (str kończy się na "kIdle" -> robot_ok() w robot_franka.py pasuje)
+  dwa obiekty libfranka.Gripper(IP) naraz działają? tak (raz przy pierwszej próbie "UDP receive: Timeout", potem ok)
+  chwytak: max_width 0.080 m
+  w HOME:  get_position() = ________   get_orientation() = ________   (oczekiwane ok. x 0.3, z 0.4-0.5)
+  pozycja zastana (nie HOME): q = [2.75 -0.17 -2.90 -1.68 -0.12 1.93 0.71], TCP = [0.620 -0.118 0.406]
+    UWAGA: staw 1 = +2.75 i staw 3 = -2.90 (prawie na limicie) – droga do HOME to duży obrót tych stawów
+
+Kalibracja hand-eye (2026-10-29, kalibruj_handeye.py, 23 pozycje, tag 20):
+  średni błąd 3.9 mm, max 10.7 mm (pozycja 6), rozrzut obrotu tagu 2.9 st. -> OCENA: dobra
+  kamera względem TCP: [4.4 -3.7 -3.7] cm   tag 20 w bazie: [50.4 4.3 0.6] cm -> blat ok. 6 mm nad podstawą (albo błąd kalibracji w pionie)
+  kostka na stole: z = 3.1-3.2 cm (= blat 0.6 + 2.5); test linijką x, y – zgodne
+  sprawdz_kalibracje.py: robot staje 2 mm od celu nad kostką, obraca palce równolegle do ścianek – działa
+  UWAGA: panda_py move_to_joint_position / move_to_pose -> cartesian_reflex / niedokładne; panda_py.ik wybiera
+         "nakręcone" ułożenia ramienia -> do ruchów własny sterownik JointPosition (jak reset_scene) + ik_blisko
+  UWAGA: przy wciśniętym stopie panda.get_pose() oddaje stary stan -> czytać przez panda.get_robot().read_once()
