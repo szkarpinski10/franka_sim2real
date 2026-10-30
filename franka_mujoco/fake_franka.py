@@ -16,8 +16,9 @@ Chwytak: prędkość z komendy (speed = prędkość rozstawu, czyli palec jedzie
 (samo obcinanie qvel po kroku nie wystarczało - palce i tak jechały kilka razy za szybko).
 
 Dodatkowo (tylko do testów):
-    place_cubes(pozycje)   - postaw kostki w podanych miejscach (obrót 0)
+    place_cubes(pozycje)   - postaw kostki w podanych miejscach ([x, y, z] z jednym yaw albo [x, y, z, yaw] osobno)
     true_cubes()           - PRAWDZIWE pozycje kostek z fizyki (do sprawdzenia, czy wieża stoi)
+    zmierz_kostki(...)     - UDAWANA KAMERA: prawdziwe pozycje + szum, w formacie jak camera/kamera_kostki.py
 """
 import threading
 import time
@@ -214,13 +215,15 @@ controllers = SimpleNamespace(JointPosition=JointPosition)
 
 # ===================== tylko do testów =====================
 def place_cubes(cubes: dict, yaw: float = 0.0):
-    """Postaw kostki w podanych miejscach, obrócone o yaw [rad] wokół pionu. cubes = {"cube_1": [x, y, z], ...}"""
+    """Postaw kostki w podanych miejscach, obrócone o yaw [rad] wokół pionu. cubes = {"cube_1": [x, y, z], ...}
+    albo każda kostka z własnym obrotem: {"cube_1": [x, y, z, yaw], ...} (jak układy z robot_p1_p2.py)."""
     with _lock:
         for name, pos in cubes.items():
             adr = sim.model.jnt_qposadr[sim.model.joint(name + "_joint").id]
             vadr = sim.model.jnt_dofadr[sim.model.joint(name + "_joint").id]
-            sim.data.qpos[adr:adr + 3] = pos
-            sim.data.qpos[adr + 3:adr + 7] = [np.cos(yaw / 2), 0, 0, np.sin(yaw / 2)]
+            a = pos[3] if len(pos) > 3 else yaw
+            sim.data.qpos[adr:adr + 3] = pos[:3]
+            sim.data.qpos[adr + 3:adr + 7] = [np.cos(a / 2), 0, 0, np.sin(a / 2)]
             sim.data.qvel[vadr:vadr + 6] = 0.0
         mujoco.mj_forward(sim.model, sim.data)
 
@@ -237,3 +240,17 @@ def true_cubes():
     """PRAWDZIWE pozycje kostek z fizyki: {"cube_1": array([x, y, z]), ...}"""
     with _lock:
         return {n: sim.data.body(n).xpos.copy() for n in ("cube_1", "cube_2", "cube_3")}
+
+
+def zmierz_kostki(szum_xy=0.005, szum_z=0.002, szum_yaw=np.radians(2.0), rng=np.random):
+    """UDAWANA KAMERA (jak KameraKostki.zmierz z camera/kamera_kostki.py): prawdziwa pozycja + szum [m] / [rad].
+    Obrót tylko wokół pionu, w zakresie [0, 90 st.) – kostka wygląda tak samo co 90 st. (YAW_OD = 0 w kamera_kostki.py).
+    Zwraca {"cube_1": (pozycja [x,y,z], kwaternion [x,y,z,w]), ...}"""
+    out = {}
+    for n, (pos, quat) in true_cubes_pose().items():
+        x, y, z, w = quat
+        R_x = np.array([1 - 2 * (y * y + z * z), 2 * (x * y + z * w), 2 * (x * z - y * w)])   # oś x kostki w bazie
+        yaw = (np.arctan2(R_x[1], R_x[0]) + rng.normal(0.0, szum_yaw)) % (np.pi / 2)
+        pos = pos + rng.normal(0.0, 1.0, 3) * [szum_xy, szum_xy, szum_z]
+        out[n] = (pos, np.array([0.0, 0.0, np.sin(yaw / 2), np.cos(yaw / 2)]))
+    return out

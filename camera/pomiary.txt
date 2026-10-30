@@ -11,8 +11,8 @@ Kamera (wynik profiles.py):
   tagi 0 / 6 / 12 wykrywane z ok. 35 cm, pewność m = 59-66
 
 Stół:
-  środek podstawy robota -> krawędź stołu za robotem: ____ cm   (_TABLE_EDGE_BEHIND_BASE, teraz 17.5)
-  blat na wysokości podstawy robota? ____   (wyjdzie też z kalibruj_handeye.py: z tagu 20)
+  środek podstawy robota -> krawędź stołu za robotem: 18.5 cm (zmierzone 2026-10-29; w MuJoCo franka_stack.xml stół zaczyna się 20 cm za podstawą)
+  blat na wysokości podstawy robota? wg kalibracji ok. 6 mm wyżej (tag 20: z = 0.6 cm) – linijką nie sprawdzone
 
 Robot (2026-10-29):
   wersja systemu w Desk: 4.2.2  -> libfranka 0.9.x
