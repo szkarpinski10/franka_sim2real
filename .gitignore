@@ -18,3 +18,4 @@ franka_mujoco/nowe_policy/*/exported/*
 # stara kopia kodu z Isaaca (aktualna wersja jest w repo sk_isaac)
 franka_mujoco/src/
 franka_mujoco/scripts/
+camera/dane_handeye_zle/

@@ -66,7 +66,13 @@ try:
                           s["tcp_quat"], kostki)
         with torch.no_grad():
             action = policy(torch.from_numpy(obs).unsqueeze(0)).squeeze(0).numpy()
-        robot.movement(s["q"] + SCALE * action[:7], action[7] >= 0)
+        if not robot.movement(s["q"] + SCALE * action[:7], action[7] >= 0):
+            print(f"Robot zatrzymał się (odruch / stop) w kroku {krok} – przerywam")
+            try:
+                robot.panda.raise_error()                    # opis błędu robota (np. który odruch)
+            except RuntimeError as e:
+                print("Błąd robota:", e)
+            break
         last_action = action.copy()
 
         for k, v in (("t", time.perf_counter() - t0), ("q", s["q"]), ("dq", s["q_vel"]), ("fingers", s["fingers"]),
@@ -82,8 +88,10 @@ try:
         print("Koniec czasu epizodu")
 
     kroki = np.diff(log["t"])
-    print(f"Krok pętli: średnio {kroki.mean() * 1000:.1f} ms, max {kroki.max() * 1000:.1f} ms   (powinno być 20)")
+    if len(kroki):                                           # robot mógł stanąć już w pierwszych krokach
+        print(f"Krok pętli: średnio {kroki.mean() * 1000:.1f} ms, max {kroki.max() * 1000:.1f} ms   (powinno być 20)")
     print(f"Niezgodności kamer: {kamery.fuzja.n_niezgodnych}")
+    input("Enter = powrót do HOME (sprawdź, czy nic nie stoi na drodze)")
     robot.reset_scene()                                      # otwiera chwytak i wraca do HOME
 finally:
     robot.robot_stop()
