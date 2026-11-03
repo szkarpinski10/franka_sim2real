@@ -5,14 +5,14 @@ import numpy as np
 model = mujoco.MjModel.from_xml_path("franka_emika_panda/franka_stack.xml")
 data = mujoco.MjData(model)
 
-# pozycja home
 HOME = np.array([0.0, -0.3, 0.0, -2.0, 0.0, 1.7, 0.785])
-_VEL = 1.0
+_VEL = 0.8
 _FINGER_VEL = 0.05
-KP = 800.0
-KD = 120.0
+KP = np.array([600, 600, 600, 600, 250, 150, 50], dtype = float)
+KD = np.array([50,50,50,20,20,20,10], dtype = float) 
 SIM_DT = 0.0005
-P_STEP = 40
+DT = 0.02
+P_STEP = int(round(DT / SIM_DT))
 TCP = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, "tcp")
 CUBES = ["cube_1", "cube_2", "cube_3"]
 
@@ -22,8 +22,8 @@ model.opt.cone = mujoco.mjtCone.mjCONE_ELLIPTIC
 model.opt.impratio = 10.0
 
 for i in range(7):
-    model.actuator_gainprm[i, 0 ] = KP
-    model.actuator_biasprm[i,:3] = [0,-KP,-KD]
+    model.actuator_gainprm[i, 0 ] = KP[i]
+    model.actuator_biasprm[i,:3] = [0,-KP[i],-KD[i]]
 
 model.dof_armature[:7] =0.0
 
@@ -79,12 +79,10 @@ def cubes_position_table():
     
 def movement(q_goal, gripper_open):
     data.ctrl[7] = 0.04 if gripper_open else 0.0
-    max_step = _VEL * SIM_DT
     max_finger = _FINGER_VEL*SIM_DT
+    step = np.clip(q_goal - data.ctrl[:7], -_VEL*DT, _VEL*DT)
+    data.ctrl[:7] = data.ctrl[:7] + step
     for _ in range(P_STEP):
-        goal = data.ctrl[:7].copy()
-        data.ctrl[:7] = goal + np.clip(q_goal- goal, -max_step, max_step)
-
         fingers_before = data.qpos[7:9].copy()
         mujoco.mj_step(model,data)
         move = data.qpos[7:9] - fingers_before
