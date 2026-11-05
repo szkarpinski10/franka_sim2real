@@ -21,9 +21,9 @@ from kamery import Kamery
 from observations_combine import obs_combine
 
 SCALE = 0.03
-N_STEPS = 1000                                               # kroków policy jak w treningu (20 s x robot.TEMPO)
-POLICY_PATH = "policy1/2026-11-01_16-15-43_800/exported/policy.pt"
-KONIEC_PO = 25                                               # tyle kroków (0.5 s x TEMPO) wieża musi stać, zanim wrócimy do HOME
+N_STEPS = 1000                                               # kroków policy jak w treningu (czas = N_STEPS x robot.DT)
+POLICY_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), robot.POLICY_PATH)   # z profilu w robot_franka
+KONIEC_PO = 25                                               # tyle kroków policy (25 x robot.DT) wieża musi stać, zanim wrócimy do HOME
 
 policy = torch.jit.load(POLICY_PATH, map_location="cpu").eval()
 
@@ -89,8 +89,8 @@ try:
     for krok in range(N_STEPS):
         s = robot.state()
         kostki = kamery.cubes_position_table(s["tcp_pos"], s["tcp_quat"], trzyma(s))
-        # zwolnione tempo: prędkości x TEMPO, żeby wyglądały jak w treningu (opis w robot_franka.py)
-        obs = obs_combine(s["q"], s["q_vel"] * robot.TEMPO, s["fingers"], s["fingers_vel"] * robot.TEMPO, last_action, s["tcp_pos"],
+        # prędkości x OBS_SKALA, żeby wyglądały jak w treningu (profil w robot_franka.py)
+        obs = obs_combine(s["q"], s["q_vel"] * robot.OBS_SKALA, s["fingers"], s["fingers_vel"] * robot.OBS_SKALA, last_action, s["tcp_pos"],
                           s["tcp_quat"], kostki)
         with torch.no_grad():
             action = policy(torch.from_numpy(obs).unsqueeze(0)).squeeze(0).numpy()

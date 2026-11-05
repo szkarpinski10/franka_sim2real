@@ -11,7 +11,7 @@ import time
 
 def petla(ip, cel_otwarty, jest_otwarty, szerokosc, predkosc, v_palcow=0.1):
     """cel_otwarty: czego chce policy (1/0); jest_otwarty: stan po ostatniej komendzie; szerokosc [m]; predkosc
-    jednego palca [m/s]; v_palcow = prędkość rozstawu palców przy move/grasp [m/s] (0.1 / TEMPO). Jedna komenda albo jeden odczyt naraz – opóźnienie komendy najwyżej jeden odczyt (ok. 0.1 s)."""
+    jednego palca [m/s]; v_palcow = prędkość rozstawu palców przy move/grasp [m/s] (z profilu w robot_franka.py). Jedna komenda albo jeden odczyt naraz – opóźnienie komendy najwyżej jeden odczyt (ok. 0.1 s)."""
     # panda_py ładujemy dopiero TU, w procesie potomnym: jeśli proces rodzica załadował panda_py przed fork,
     # panda.get_state() w rodzicu zawiesza się na zawsze (sprawdzone 5.11)
     from panda_py import libfranka

@@ -150,3 +150,26 @@ ZMIANY W KODZIE – dziennik (co, gdzie, dlaczego). Najnowsze na dole.
     60-100 ms na krok) wyglądała najlepiej. TEMPO 3 daje podobną prędkość, ale równo i z działającymi kamerami
     i wykrywaniem stopu. MuJoCo: TEMPO 3 -> 28/40 wież (TEMPO 1: 31/40), stawy 99% < 0.30 rad/s, 5.3 rad/s2.
     Epizod 1000 kroków = 60 s. Jeśli przy robocie za wolno / policy gorzej – spróbować TEMPO = 2.
+
+25. franka_mujoco/robot_franka.py – PROFILE zamiast samego TEMPO: jedna linijka PROFIL = "tempo3" / "nowy_B" /
+    "nowy_A" / "pelne" ustawia razem model (POLICY_PATH), krok DT, prędkość _VEL, przeliczenie prędkości w obserwacji
+    OBS_SKALA, prędkość palców i wygładzanie celu. run_robot.py bierze POLICY_PATH i OBS_SKALA z profilu.
+    "nowy_B"/"nowy_A" – dla modelu z nowego treningu 0.3 rad/s: UZUPEŁNIĆ ścieżkę i wartości z treningu.
+
+26. franka_mujoco/robot_franka.py – wygładzanie celu w sterowniku: ctrl.set_filter(FILTR_CELU), w profilu tempo3
+    i nowy_B = 0.05 (panda_py: "TP1 filter coefficient used to filter input signals", działa w C++ co 1 ms – nie
+    blokuje Pythona). Dlaczego (test_plynnosc.py, MuJoCo, 30 układów, sterowanie jak na robocie):
+      pełne tempo:            23/30 wież, przyspieszenia stawów 99% < 44 rad/s2
+      tempo3 bez filtra:      21/30, 46 rad/s2  <- samo zwolnienie NIE usuwa szarpnięć (cel skacze co 60 ms)
+      tempo3 + filtr 0.05:    21/30, 10 rad/s2, 0/30 kontaktów ze stołem
+      tempo3 + filtr 0.02:    23/30, 7.8 rad/s2, ale 5/30 kontaktów (robot reaguje z opóźnieniem)
+      z niedoskonałościami robota (pętla +0-15 ms, chwytak co 66 ms, opóźnienie komendy chwytaka): bez filtra 17/30
+      i 5 kontaktów, z filtrem 0.05 – 20/30, 1 kontakt, 11 rad/s2.
+    DO SPRAWDZENIA NA ROBOCIE: czy set_filter działa tak, jak zakładamy (ruch gładszy, bez kołysania).
+    Jeśli robot reaguje dziwnie – filtr = 1.0 w profilu (wyłączone).
+
+27. Nowe narzędzia: franka_mujoco/test_plynnosc.py (płynność i skuteczność w MuJoCo przy sterowaniu jak na robocie;
+    parametry --dt --vel --obs-skala --filtr --robot – do sprawdzenia nowego modelu przed szkołą) oraz
+    franka_mujoco/analiza_logu.py (analiza logu z robota: pętla, prędkości, przyspieszenia, nerwowość policy).
+    Sprawdzone: run_robot.py z udawanym robotem/chwytakiem/kamerami – pętla 60 ms równo, log, wykrycie odruchu
+    (przez raise_error, przy is_moving = True jak na robocie), powrót do HOME.

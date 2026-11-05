@@ -7,13 +7,33 @@ import chwytak_proces
 from observations_combine import quat_to_matrix
 from filtr import Filtr_CBF
 
-# zwolnione tempo: krok policy co 0.02*TEMPO s przy tym samym ruchu na krok (0.016 rad), więc robot jedzie TEMPO razy
-# wolniej; run_robot.py mnoży prędkości w obserwacji przez TEMPO, żeby wyglądały jak w treningu. MuJoCo (40 układów):
-# TEMPO 1: 31/40 wież, stawy 99% < 0.92 rad/s i 15 rad/s2; TEMPO 2: 28/40, 0.45 rad/s, 7.9 rad/s2; TEMPO 3: 28/40.
-# 5.11 na robocie pełne tempo (1) szarpało i dało odruch cartesian_reflex. TEMPO = 1 -> jak w treningu.
-TEMPO = 3                                                    # ok. prędkość z pierwszej próby (film 5.11), ale równo
-_VEL = 0.8 / TEMPO
-DT = 0.02 * TEMPO
+# PROFILE: ustawienia, które muszą pasować do policy (wybór niżej: PROFIL = ...)
+#   policy     – ścieżka do modelu (względem franka_mujoco/)
+#   dt         – krok policy [s];  vel – największa prędkość stawu [rad/s] (ruch na krok = vel * dt)
+#   obs_skala  – x prędkości stawów i palców w obserwacji (żeby wyglądały jak w treningu)
+#   v_palcow   – prędkość rozstawu palców chwytaka przy move/grasp [m/s]
+#   filtr      – wygładzanie celu w sterowniku (JointPosition.set_filter, co 1 ms; 1 = brak). MuJoCo (test_plynnosc.py,
+#                30 układów, tempo3): bez filtra przyspieszenia stawów 99% < 46 rad/s2 (cel skacze co 60 ms – tyle samo
+#                szarpania co w pełnym tempie!), filtr 0.05: 10 rad/s2 przy tej samej skuteczności (21/30), 0.02: 7.8,
+#                ale 5/30 kontaktów ze stołem (opóźnienie). Z niedoskonałościami robota: 0.05 -> 20/30, bez -> 17/30.
+# "tempo3": obecny model (trening: krok 20 ms, 0.8 rad/s) puszczony 3x wolniej – ten sam ruch na krok, krok co 60 ms.
+#   5.11 na robocie pełne tempo szarpało (odruch cartesian_reflex), pierwsza próba (przypadkiem ok. 60-100 ms na krok)
+#   wyglądała dobrze. MuJoCo (40 układów): tempo 1: 31/40 wież; tempo 2: 28/40; tempo 3: 28/40, stawy 99% < 0.30 rad/s.
+# "nowy_B" / "nowy_A": model z nowego treningu 0.3 rad/s – UZUPEŁNIĆ ścieżkę i wartości z treningu
+#   (B: decimation 6 -> krok 60 ms, velocity_limit ok. 0.27; A: krok 20 ms, velocity_limit 0.3).
+PROFILE = {
+    "tempo3": dict(policy="policy1/2026-11-01_16-15-43_800/exported/policy.pt",
+                   dt=0.06, vel=0.8 / 3, obs_skala=3.0, v_palcow=0.1 / 3, filtr=0.05),
+    "pelne":  dict(policy="policy1/2026-11-01_16-15-43_800/exported/policy.pt",
+                   dt=0.02, vel=0.8, obs_skala=1.0, v_palcow=0.1, filtr=1.0),
+    "nowy_B": dict(policy="UZUPELNIC/exported/policy.pt",
+                   dt=0.06, vel=0.27, obs_skala=1.0, v_palcow=0.1 * 0.27 / 0.8, filtr=0.05),
+    "nowy_A": dict(policy="UZUPELNIC/exported/policy.pt",
+                   dt=0.02, vel=0.3, obs_skala=1.0, v_palcow=0.1 * 0.3 / 0.8, filtr=1.0),
+}
+PROFIL = "tempo3"
+_p = PROFILE[PROFIL]
+POLICY_PATH, DT, _VEL, OBS_SKALA, FILTR_CELU = _p["policy"], _p["dt"], _p["vel"], _p["obs_skala"], _p["filtr"]
 
 IP = "172.16.0.2"
 # chwytak w osobnym procesie (opis w chwytak_proces.py); start PRZED połączeniem z robotem, gdy nie ma jeszcze wątków
@@ -22,7 +42,7 @@ _cel_otwarty = _mp.Value("b", 1, lock=False)                 # czego chce policy
 _jest_otwarty = _mp.Value("b", 0, lock=False)                # stan po ostatniej komendzie (na starcie: nieznany -> otwórz)
 _szerokosc = _mp.Value("d", -1.0, lock=False)                # [m], -1 = jeszcze brak odczytu
 _predkosc = _mp.Value("d", 0.0, lock=False)                  # [m/s] jednego palca
-_mp.Process(target=chwytak_proces.petla, args=(IP, _cel_otwarty, _jest_otwarty, _szerokosc, _predkosc, 0.1 / TEMPO),
+_mp.Process(target=chwytak_proces.petla, args=(IP, _cel_otwarty, _jest_otwarty, _szerokosc, _predkosc, _p["v_palcow"]),
             daemon=True).start()
 # panda_py dopiero PO starcie procesu chwytaka – import panda_py przed fork zawiesza potem panda.get_state()
 import panda_py
@@ -111,6 +131,7 @@ def movement(q_goal, gripper_open):
 
     if ctrl is None:
         ctrl = controllers.JointPosition()
+        ctrl.set_filter(FILTR_CELU)                          # 1 = bez wygładzania (domyślnie w panda_py)
         panda.start_controller(ctrl)
         q_command = np.array(panda.get_state().q)
         next_step = time.perf_counter()
