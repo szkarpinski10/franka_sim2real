@@ -1,0 +1,152 @@
+ZMIANY W KODZIE – dziennik (co, gdzie, dlaczego). Najnowsze na dole.
+
+=== 2026-11-05 (szkoła, nowy stół 120 x 70 cm) ===
+
+1. camera/kalibracja.json – nowa kalibracja hand-eye (30 pozycji, błąd średni 4.0 mm, max 6.6 mm, obroty do 162 st.).
+   Stare dane: camera/dane_handeye_stary_stol/ (stara kalibracja jest w gicie, commit fcc0e51).
+   Kamera względem TCP: [4.8 -3.0 -3.9] cm (było [4.4 -3.7 -3.7]).
+
+2. franka_mujoco/robot_franka.py – filtr stołu: stol_z 0.006 -> 0.0.
+   Dlaczego: nowy blat jest na wysokości bazy robota (tag 20 na stole: z = 0.0 cm). Ze starą wartością filtr
+   zatrzymywałby palce 6 mm za wysoko.
+
+3. camera/logitech.py – INDEKS 0 -> "/dev/v4l/by-id/usb-046d_C922_..." (stała nazwa Logitecha C922).
+   Dlaczego: Logitech był /dev/video8, a numery zmieniają się po przepięciu kabla / restarcie.
+   Sprawdzone: kamera otwiera się po tej nazwie w 1280 x 720.
+
+   Do sprawdzenia w domu: kostka na stole wychodzi z = 2.7-2.9 cm zamiast 2.5 (stabilnie).
+   Zmierzyć suwmiarką kostkę (czy 50 mm) i czarny kwadrat tagu na kostce (czy 35 mm).
+
+4. .gitignore – dopisane camera/dane_handeye_stary_stol/ (te dane są już w gicie jako dane_handeye z commita fcc0e51).
+
+5. camera/logitech.py – FOCUS zostaje 0 (dobrane w podglądzie; między 0 a 5 brak różnicy, tagi m = 48-57).
+   Logitech stoi z boku/przodu stołu; widzi górne i boczne tagi wszystkich trzech kostek.
+
+6. camera/kalibruj_logitech.py – poprawione liczenie błędu pojedynczego zdjęcia (reshape do (N, 2)).
+   Dlaczego: w OpenCV 5 cornerSubPix daje narożniki (N, 2), a projectPoints (N, 1, 2); odejmowanie robiło
+   macierz N x N i pokazywało bzdurne 100-260 px na zdjęcie (sama kalibracja była liczona dobrze).
+
+7. camera/logitech.json – kalibracja obiektywu Logitecha: 36 zdjęć, błąd reprojekcji 0.377 px (dobrze < 0.5).
+   5 zdjęć z błędem > 1 px (02, 09, 10, 25, 31 – pewnie rozmazane) przeniesione do camera/dane_logitech/odrzucone/.
+   fx = 969.6, fy = 967.6, cx = 607.2, cy = 350.1. POLE (25 mm) nie mierzone – na K i zniekształcenia nie wpływa.
+
+8. camera/kamery.py – OPOZNIENIE_STATYW 0.10 -> 0.06 s.
+   Pomiar (logitech.py --opoznienie): mediana 28 ms, ale tylko 6/12 udanych i min 12 ms (mniej niż czas jednej klatki
+   33 ms) – raczej przeszkadzała auto-ekspozycja. Typowo dla kamerek 50-100 ms. W MuJoCo opóźnienie 160 ms przy
+   założonych 100 ms prawie nic nie zmieniało (12 vs 10 / 50), więc wybrane 60 ms jako środek.
+
+9. camera/logitech.py – zmierz_opoznienie(): na czas pomiaru stała ekspozycja (AUTO_EXPOSURE = 1, EXPOSURE = 150).
+   Dlaczego: auto-ekspozycja wyrównywała jasność migającego ekranu, pomiar był niepewny. Normalna praca bez zmian.
+
+10. camera/statyw.json – kalibracja statywu (Logitech względem bazy robota): 13 położeń tagu 20,
+    błąd narożników średni 2.8 mm, max 6.0 mm. Logitech w bazie [3.4 -39.8 56.3] cm (ok. 40 cm na prawo od robota,
+    56 cm nad blatem), patrzy w dół pod kątem 39 st., środek kadru na stole w (52, 10) cm.
+    OPOZNIENIE_STATYW zostaje 0.06 s (drugiego pomiaru nie było – kamery nie można było ruszać).
+    OD TERAZ NIE RUSZAĆ LOGITECHA (inaczej kalibruj_statyw.py od nowa).
+
+11. camera/kamery.py – kamera na chwytaku nie mierzy też, gdy chwytak się OBRACA (W_MAX_REKA = 0.3 rad/s).
+    Dlaczego: kamery.py na robocie – przy przestawianiu chwytaka ręką kamera na chwytaku myliła się o 4.3-4.6 cm
+    (3 razy), a dotąd sprawdzana była tylko prędkość przesuwania (V_MAX_REKA).
+
+12. camera/fuzja.py – przy niezgodności kamer (> 1.5 cm) wygrywa pomiar BLIŻSZY ostatniej znanej pozycji kostki
+    (wcześniej zawsze kamera na chwytaku). Dlaczego: na robocie raz myliła się kamera na chwytaku (4-5 cm, obrót),
+    raz statyw (kostka częściowo zasłonięta chwytakiem, 2.5 cm i 11 st.). Sprawdzone na tych przykładach.
+
+    Wyniki kamery.py (robot stoi): statyw stabilny ±1 mm, z kostki 2.4-2.5 cm; zgodność kamer 0.6-1.0 cm;
+    kamera na chwytaku z = 1.6-2.0 cm (z HOME było 2.7-2.9 – błąd w pionie zależy od pozycji, ±0.5 cm).
+    Zasłanianie: przy chwytaku nad kostką statyw dalej widzi kostki 2 i 3; kostka 1 znikała z obu kamer na ok. 5 s.
+
+13. camera/kamera_kostki.py – nowa funkcja tag_wiarygodny(): odrzuca tag, którego oś (w głąb kostki) nie jest
+    ani pionowo w dół (górna ścianka), ani pozioma (boczna), z tolerancją 20 st. Używana w KameraKostki.pomiary()
+    (kamera na chwytaku) i w camera/kamery.py (statyw).
+    Dlaczego: na robocie dwa razy ta sama błędna wartość z kamery na chwytaku ([53.4 -16.8] przy prawdziwym
+    [49.9 -14.2], 4.3-5.0 cm), za każdym razem z komunikatem "Error, more than one new minima found" – AprilTag
+    widziany pod niekorzystnym kątem ma dwie możliwe orientacje i biblioteka wybrała złą. To samo u statywu:
+    [48.3 1.8 3.9] 118 st. (kostka "uniesiona" o 1.4 cm). Sprawdzone na sztucznych orientacjach (do 15 st. ok,
+    25-30 st. odrzucone).
+
+14. camera/fuzja.py – odporność na pojedyncze złe klatki:
+    a) pomiar dalej niż SKOK = 3 cm od ostatniej pozycji kostki jest przyjmowany dopiero, gdy NOWSZY pomiar potwierdzi
+       go z dokładnością do 1.5 cm (prawdziwe przesunięcie kostki: opóźnienie ok. 1 klatki, ok. 0.1 s);
+    b) przy niezgodności kamer z różnych chwil (> 0.15 s) wygrywa nowszy pomiar; z tej samej chwili – bliższy
+       ostatniej pozycji (punkt 12).
+    Dlaczego: kamery.py po punkcie 13 dalej pokazywało pojedyncze klatki z błędem 1.5-5 cm (kamera na chwytaku
+    [52.7 -9.7] przy prawdziwym [50.0 -14.1], gdy statyw tej kostki akurat nie widział – fuzja przyjęłaby to;
+    statyw [48.1 2.2 3.8] przy częściowo zasłoniętej kostce). Następna klatka była zawsze znów dobra.
+    Sprawdzone na sekwencji: zła klatka ignorowana, przesunięta kostka przyjęta po 2. klatce, zła klatka statywu
+    odrzucona. Licznik Fuzja.n_odrzuconych (do logów).
+
+15. franka_mujoco/filtr.py – opcja kamery=[T_tcp_cam, ...]: prostopadłościan 12 x 4 x 3.5 cm wokół każdej kamery
+    (z zapasem na uchwyt) dołączony do punktów dłoni. franka_mujoco/robot_franka.py – filtr dostaje obie kamery:
+    D435i z camera/kalibracja.json i DRUGĄ kamerę założoną lustrzanie (180 st. wokół osi chwytaka) – SPRAWDZIĆ,
+    czy tak jest zamocowana. Dlaczego: kamer nie ma w modelu MuJoCo, a przy przechyle chwytaka (policy przechyla do
+    ok. 30 st.) kamera schodzi do 1.5 cm niżej niż palce (sprawdzone na kinematyce) – filtr jej nie pilnował.
+
+16. franka_mujoco/run_robot.py – tryb  python run_robot.py --powietrze : filtr udaje stół 5 cm wyżej, więc palce
+    i kamery zostają ok. 6.5 cm nad blatem (nad kostkami). Do pierwszego uruchomienia: pętla, przycisk stop,
+    płynność ruchu bez dotykania czegokolwiek.
+
+    Waga do Desk (nie ważone): D435i 72 g (karta katalogowa) + druga kamera + uchwyty – szacunkowo 0.25 kg razem,
+    środek ciężkości mniej więcej na osi chwytaka (kamery po przeciwnych stronach).
+
+17. franka_mujoco/robot_franka.py – COFNIĘTE dwa połączenia z chwytakiem (gripper_reader usunięty, state() czyta
+    gripper.read_once()). Dlaczego: run_robot.py --powietrze -> "Błąd chwytaka: TCP connection got interrupted",
+    chwytak się nie otworzył. Chwytak trzyma tylko jedno połączenie komend: drugie Gripper(IP) odcina pierwsze.
+    Pomyłka z 29.10: test "dwa połączenia działają" nie sprawdzał pierwszego połączenia po otwarciu drugiego
+    (pierwszy test dał wtedy "UDP receive: Timeout" – to był właśnie ten objaw). Wersja użytkownika (jedno
+    połączenie) była dobra. Zabezpieczenie z punktu 3 (limit 5 s) zadziałało – robot się nie ruszył.
+
+18. camera/fuzja.py – potwierdzenie skoku (punkt 14) tylko dla PODEJRZANYCH skoków: gdy obie kamery zgodnie widzą
+    kostkę w nowym miejscu albo czerwona została puszczona < 1 s temu – skok przyjmowany od razu; czeka na
+    potwierdzenie tylko skok widziany przez jedną kamerę (przypadek z robota).
+    Dlaczego: w MuJoCo (bez złych klatek) pełne potwierdzanie kosztowało: 101/150 wież vs 113/150 bez niego
+    (seed 7, 8, 9 po 50 układów) – opóźniało prawdziwe przesunięcia.
+
+19. franka_mujoco/robot_franka.py – szerokość chwytaka czytana w osobnym wątku gripper_reader() (w tle, ciągle);
+    state() bierze ostatnią wartość i nie czeka. Prędkość palca z kolejnych pakietów chwytaka.
+    Dlaczego: pierwszy run_robot.py --powietrze – robot mocno drgał i jechał koślawo, a po wciśnięciu stopu program
+    zawisł w gripper.read_once(). Pomiar (robot stoi): gripper.read_once() średnio 57 ms, max 100 ms (chwytak wysyła
+    stan ok. 10-20 razy/s), panda.get_state() 1 ms. Pętla 50 Hz robiła więc ok. 10-15 kroków/s nierówno.
+
+20. franka_mujoco/run_robot.py – log zapisywany PRZED zamykaniem kamer, do franka_mujoco/logi/ (niezależnie od
+    folderu, z którego uruchomiono), przycięty do pełnych kroków. Dlaczego: przy drugim Ctrl+C log się nie zapisał.
+
+21. Chwytak w OSOBNYM PROCESIE: nowy franka_mujoco/chwytak_proces.py (pętla: komenda move/grasp albo read_once),
+    franka_mujoco/robot_franka.py wymienia z nim liczby przez multiprocessing.Value (cel otwarty, jest otwarty,
+    szerokość, prędkość palca); wątki gripper_action/gripper_reader i obiekt gripper usunięte; nowa funkcja
+    robot_franka.chwytak_otwarty() (run_robot.py używa jej zamiast robot.gripper_is_open).
+    Dlaczego: panda_py read_once/move/grasp czekają na chwytak NIE puszczając GIL-a – zmierzone: drugi wątek dostawał
+    2% czasu. Skutki: wersja z punktu 19 (wątek w tle) zagłodziła kamery (0 klatek w 10 s, "Kamery nie widzą
+    kostek"), a wcześniej pętla 50 Hz robiła 10-15 kroków/s (drgania); grasp (ok. 0.5 s) zatrzymywał całą pętlę.
+    WAŻNE: proces chwytaka startuje (fork) PRZED import panda_py w robot_franka.py, a chwytak_proces ładuje panda_py
+    dopiero w procesie potomnym – jeśli panda_py jest załadowane przed fork, panda.get_state() w rodzicu zawiesza się
+    na zawsze (sprawdzone: nawet z pustym procesem potomnym). Nic przed robot_franka nie może importować panda_py.
+    Test bez ruchu ramienia (kolejność importów jak run_robot.py): state() + kamery po rozruchu średnio 4.4 ms,
+    max 9.7 ms; kamery ok. 14 kl/s każda; jeden skok 386 ms tylko w pierwszym kroku (start kamer).
+
+22. franka_mujoco/robot_franka.py – robot_ok() pyta panda.raise_error() (i dopiero potem is_moving()); opis błędu
+    w robot_franka.ostatni_blad. franka_mujoco/run_robot.py – wypisuje robot.ostatni_blad i licznik odrzuconych
+    skoków fuzji; log zapisywany ZARAZ po epizodzie (przed pytaniem o powrót do HOME), funkcja zapisz_log().
+    Dlaczego: run_robot.py --powietrze po poprawce chwytaka: pętla OK (średnio 20.0 ms, max 34.7 ms), ale robot
+    stanął z "cartesian_reflex" (i był wciśnięty stop), a run_robot tego nie wykrył i liczył dalej do 20 s –
+    is_moving() po odruchu dalej dawało True. Log się nie zapisał, bo program czekał na Enter przy powrocie do HOME,
+    a potem odłączono robota.
+    Do sprawdzenia przy robocie: czy po odruchu / stopie pojawia się "Robot zatrzymał się" (raise_error według
+    dokumentacji panda_py służy właśnie do tego, ale na robocie jeszcze nie sprawdzone).
+
+23. ZWOLNIONE TEMPO (franka_mujoco/robot_franka.py: TEMPO = 2; run_robot.py; chwytak_proces.py):
+    krok policy co 0.02*TEMPO s (DT = 0.04), ten sam ruch na krok (_VEL = 0.8/TEMPO -> 0.016 rad/krok), prędkości
+    stawów i palców w obserwacji x TEMPO (żeby wyglądały jak w treningu), chwytak move/grasp z prędkością 0.1/TEMPO,
+    filtr stołu z vel/dt jak wyżej. Epizod 1000 kroków = 40 s. TEMPO = 1 przywraca pełne tempo.
+    Dlaczego: filmy z robota (5.11): wersja po poprawce pętli (50 Hz) ok. 2x szybsza, w szczytach 3.6x (gwałtowne
+    rzuty, odruch cartesian_reflex); pierwsza wersja wyglądała lepiej, bo przez blokujący chwytak pętla robiła tylko
+    10-15 kroków/s – czyli była przypadkiem zwolniona. MuJoCo (40 układów, prawdziwe pozycje): TEMPO 1: 31/40 wież,
+    stawy 99% < 0.92 rad/s, 15 rad/s2; TEMPO 2: 28/40, 0.45 rad/s, 7.9 rad/s2; TEMPO 3: 28/40, 0.30 rad/s, 5.3 rad/s2.
+    Uwaga: wcześniejsze zwalnianie przez samo _VEL (mniejszy ruch na krok) psuło policy (8/20) – tu ruch na krok
+    jest ten sam, zmienia się tylko czas między krokami.
+
+24. franka_mujoco/robot_franka.py – TEMPO = 3 (zamiast 2): krok policy co 60 ms, robot ok. 3x wolniej niż w treningu.
+    Dlaczego: użytkownikowi pierwsza próba (film 42 s, pętla przez blokujący chwytak ok. 10-15 kroków/s, czyli
+    60-100 ms na krok) wyglądała najlepiej. TEMPO 3 daje podobną prędkość, ale równo i z działającymi kamerami
+    i wykrywaniem stopu. MuJoCo: TEMPO 3 -> 28/40 wież (TEMPO 1: 31/40), stawy 99% < 0.30 rad/s, 5.3 rad/s2.
+    Epizod 1000 kroków = 60 s. Jeśli przy robocie za wolno / policy gorzej – spróbować TEMPO = 2.

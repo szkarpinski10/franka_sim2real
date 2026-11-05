@@ -58,7 +58,8 @@ def licz():
     print("Błąd każdego zdjęcia (duży = rozmazane / źle wykryte – usuń plik i policz jeszcze raz):")
     for p, o, i, r, t in zip(uzyte, obj_pts, img_pts, rvecs, tvecs):
         rzut, _ = cv2.projectPoints(o, r, t, K, dist)
-        blad = np.sqrt(np.mean(np.sum((rzut - i) ** 2, axis=2)))
+        # reshape: OpenCV 5 daje narożniki jako (N, 2), a projectPoints (N, 1, 2) – bez tego odejmowanie robi N x N
+        blad = np.sqrt(np.mean(np.sum((rzut.reshape(-1, 2) - i.reshape(-1, 2)) ** 2, axis=1)))
         print(f"  {os.path.basename(p)}  {blad:.3f} px" + ("   <-- podejrzane" if blad > 2 * rms else ""))
     print(f"fx = {K[0, 0]:.1f}  fy = {K[1, 1]:.1f}  cx = {K[0, 2]:.1f}  cy = {K[1, 2]:.1f}")
     print(f"zniekształcenia: {np.round(dist.flatten(), 4)}")

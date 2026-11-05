@@ -21,6 +21,10 @@ CZERWONA = "cube_2"
 SWIEZY = 0.3                                                 # [s] pomiar starszy od tego nie jest już "świeży"
 NIEZGODNE = 0.015                                            # [m] tyle mogą się różnić kamery, zanim uznamy, że coś nie tak
 PO_CHWYCIE = 0.1                                             # [s] po zamknięciu palców kostka jeszcze się układa
+SKOK = 0.03                                                  # [m] dalej od ostatniej pozycji -> czekamy na potwierdzenie
+# 5.11 na robocie: pojedyncze złe klatki (niejednoznaczny AprilTag, częściowo zasłonięty tag) dawały 1.5-5 cm błędu,
+# a w następnej klatce pomiar był znów dobry. Przesunięta kostka zostaje w nowym miejscu, więc skok przyjmujemy dopiero,
+# gdy drugi, NOWSZY pomiar potwierdzi go z dokładnością do NIEZGODNE.
 # kostka wygląda tak samo co 90 st., więc kamera zna obrót tylko w jakimś przedziale 90 st. Policy patrzy na kwaternion
 # kostki wprost i działa najlepiej z przedziałem [45, 135) st. (MuJoCo, 60 układów: 50/60; [0, 90): 41/60)
 YAW_OD = np.radians(45)
@@ -79,6 +83,9 @@ class Fuzja:
         self.offset = None                                   # czerwona w układzie TCP (4 x 4), gdy trzymana
         self.t_chwytu = None
         self.n_niezgodnych = 0                               # do logów: ile razy kamery się nie zgodziły
+        self.kandydat = {}                                   # kostka -> (t, pos) – skok czekający na potwierdzenie
+        self.n_odrzuconych = 0                               # do logów: ile pojedynczych skoków odrzucono
+        self.t_puszczenia = None                             # chwila puszczenia czerwonej (skok z "w chwytaku" na pomiar)
 
     def dodaj(self, kamera, kostka, pos, yaw, t, T_base_tcp=None):
         """Jeden pomiar kostki. T_base_tcp = poza TCP w chwili zdjęcia (potrzebna do czerwonej w chwytaku)."""
@@ -103,15 +110,43 @@ class Fuzja:
                     self.ostatnie[kostka] = self._czerwona_w_chwytaku(T_base_tcp, teraz)
                     continue
                 if kostka == CZERWONA:
+                    if self.offset is not None:                  # właśnie puszczona
+                        self.t_puszczenia = teraz
                     self.offset, self.t_chwytu = None, None
                 m = self.swieze(kostka, teraz)
+                zgodne_obie = False                              # obie kamery widzą to samo -> skok bez potwierdzenia
                 if len(m) == 2:
+                    zgodne_obie = np.linalg.norm(m["reka"][1] - m["statyw"][1]) <= NIEZGODNE
                     if np.linalg.norm(m["reka"][1] - m["statyw"][1]) > NIEZGODNE:
                         self.n_niezgodnych += 1
-                        m = {"reka": m["reka"]}
+                        # wygrywa pomiar bliższy ostatniej znanej pozycji (kostka nie skacze o kilka cm); 5.11 na robocie
+                        # myliła się raz kamera na chwytaku (obrót, 4-5 cm), raz statyw (częściowo zasłonięta, 2.5 cm)
+                        if abs(m["reka"][0] - m["statyw"][0]) > 0.15:    # z różnych chwil -> nowszy (starszy mógł
+                            kamera = max(m, key=lambda k: m[k][0])      # być złą klatką albo kostka się przesunęła)
+                        elif kostka in self.ostatnie:
+                            stara = self.ostatnie[kostka][0]
+                            kamera = min(m, key=lambda k: np.linalg.norm(m[k][1] - stara))
+                        else:
+                            kamera = "reka"
+                        m = {kamera: m[kamera]}
                 if m:
                     pos = np.mean([p for _, p, _, _ in m.values()], axis=0)
                     yaw = usrednij_yaw([y for _, _, y, _ in m.values()])
+                    t_pomiaru = max(t for t, _, _, _ in m.values())
+                    tuz_po_puszczeniu = (kostka == CZERWONA and self.t_puszczenia is not None
+                                         and teraz - self.t_puszczenia < 1.0)
+                    podejrzany = not zgodne_obie and not tuz_po_puszczeniu    # skok widziany przez jedną kamerę
+                    if podejrzany and kostka in self.ostatnie and np.linalg.norm(pos - self.ostatnie[kostka][0]) > SKOK:
+                        kand = self.kandydat.get(kostka)
+                        if kand is None or t_pomiaru <= kand[0] or np.linalg.norm(pos - kand[1]) > NIEZGODNE:
+                            if kand is None or t_pomiaru > kand[0]:  # nowy (inny) skok – zapamiętaj, nie przyjmuj
+                                if kand is not None:
+                                    self.n_odrzuconych += 1
+                                self.kandydat[kostka] = (t_pomiaru, pos)
+                            continue
+                    elif kostka in self.kandydat:                # był skok, ale kolejny pomiar wrócił na stare miejsce
+                        self.n_odrzuconych += 1
+                    self.kandydat.pop(kostka, None)
                     self.ostatnie[kostka] = (pos, yaw_to_quat(yaw))
             if any(k not in self.ostatnie for k in KOSTKI):
                 return None

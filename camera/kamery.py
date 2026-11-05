@@ -27,11 +27,14 @@ from fuzja import Fuzja, KOSTKI, poza, usrednij_yaw
 DIR = os.path.dirname(os.path.abspath(__file__))
 CUBE_TAG = 0.035
 V_MAX_REKA = 0.05                                            # [m/s] szybciej -> zdjęcie z chwytaka rozmyte/nieaktualne
+W_MAX_REKA = 0.3                                             # [rad/s] tak samo dla obrotu chwytaka (5.11: przy obracaniu
+                                                             # ręką kamera na chwytaku myliła się o 4-5 cm)
 POZA_SWIEZA = 0.05                                           # [s] w historii nie ma pozy tak blisko chwili zdjęcia -> pomijamy
 # opóźnienie obrazu = od zdjęcia do odebrania klatki. Wynik dostaje pozę TCP z CHWILI ZDJĘCIA (z historii), bo przy
 # czerwonej w chwytaku 100 ms różnicy to kilka cm (MuJoCo: opóźnienie 40 ms -> 26/30 wież, 100 ms -> 18/30).
 OPOZNIENIE_REKA = 0.06                                       # [s] tylko gdy RealSense nie poda czasu zdjęcia
-OPOZNIENIE_STATYW = 0.10                                     # [s] ZMIERZ: python logitech.py --opoznienie
+OPOZNIENIE_STATYW = 0.06                                     # [s] pomiar 5.11: 28 ms, ale niepewny (6/12 udanych, min 12 ms
+                                                             # < czas klatki); typowo 50-100 ms; ±40 ms bez znaczenia (MuJoCo)
 
 
 class Kamery:
@@ -92,12 +95,15 @@ class Kamery:
                 # robot jechał szybko -> zdjęcie rozmyte, a mały błąd czasu to duży błąd pozycji
                 if np.linalg.norm(T[:3, 3] - T_przed[:3, 3]) / 0.05 > V_MAX_REKA:
                     continue
+                obrot = np.arccos(np.clip((np.trace(T_przed[:3, :3].T @ T[:3, :3]) - 1) / 2, -1.0, 1.0))
+                if obrot / 0.05 > W_MAX_REKA:                # chwytak się obraca -> też rozmyte / zły czas
+                    continue
                 self._wloz("reka", kam.pomiary(kam.wykryj(img), T), t, T)
         finally:
             kam.zamknij()
 
     def _watek_statyw(self):
-        from kamera_kostki import KOSTKI as TAGI, srodek_i_yaw
+        from kamera_kostki import KOSTKI as TAGI, srodek_i_yaw, tag_wiarygodny
         from logitech import Logitech
         with open(os.path.join(DIR, "statyw.json")) as f:
             T_base_cam = np.array(json.load(f)["T_base_cam"])
@@ -110,7 +116,7 @@ class Kamery:
                 pomiary = {}
                 for d in kam.wykryj(img, CUBE_TAG):
                     nazwa = next((k for k, ids in TAGI.items() if d.tag_id in ids), None)
-                    if nazwa is not None:
+                    if nazwa is not None and tag_wiarygodny(T_base_cam, d.pose_R):
                         pomiary.setdefault(nazwa, []).append(srodek_i_yaw(T_base_cam, d.pose_R, d.pose_t))
                 self._wloz("statyw", pomiary, t, self.poza(t))  # poza TCP – tylko dla czerwonej w chwytaku
         finally:

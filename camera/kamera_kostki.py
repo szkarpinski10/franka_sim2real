@@ -50,6 +50,14 @@ def yaw_to_quat(yaw):
     return np.array([0.0, 0.0, np.sin(yaw / 2), np.cos(yaw / 2)])
 
 
+def tag_wiarygodny(T_base_cam, R_cam_tag, max_kat=np.radians(20)):
+    """Czy orientacja tagu ma sens dla kostki leżącej na stole: oś z tagu (w głąb kostki) skierowana w dół
+    (górna ścianka) albo poziomo (boczna). AprilTag pod niekorzystnym kątem ma dwie możliwe orientacje
+    ("more than one new minima found") i czasem wybiera złą – środek kostki ląduje wtedy 4-5 cm obok (5.11)."""
+    nz = (T_base_cam[:3, :3] @ R_cam_tag[:, 2])[2]           # pionowa składowa osi z tagu w bazie
+    return nz < -np.cos(max_kat) or abs(nz) < np.sin(max_kat)
+
+
 def srodek_i_yaw(T_base_cam, R_cam_tag, t_cam_tag):
     """Środek kostki [m] i jej obrót wokół pionu [rad] w układzie bazy z jednego tagu."""
     srodek_cam = np.asarray(t_cam_tag).flatten() + R_cam_tag[:, 2] * HALF   # oś z tagu wchodzi w kostkę
@@ -106,6 +114,8 @@ class KameraKostki:
         T_base_cam = np.asarray(T_base_tcp) @ self.T_tcp_cam
         out = {}
         for d in tagi:
+            if not tag_wiarygodny(T_base_cam, d.pose_R):    # zła z dwóch możliwych orientacji tagu
+                continue
             nazwa = next(k for k, ids in KOSTKI.items() if d.tag_id in ids)
             out.setdefault(nazwa, []).append(srodek_i_yaw(T_base_cam, d.pose_R, d.pose_t))
         return out

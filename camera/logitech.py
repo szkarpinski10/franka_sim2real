@@ -25,7 +25,8 @@ import pupil_apriltags
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 KALIBRACJA = os.path.join(DIR, "logitech.json")
-INDEKS = 0                                                   # numer kamery (/dev/video0 -> 0); RealSense też zajmuje numery
+INDEKS = "/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_23B315FF-video-index0"   # Logitech C922 (stała nazwa;
+                                                             # numer /dev/videoN zmienia się po przepięciu, RealSense też je zajmuje)
 W, H, FPS = 1280, 720, 30
 FOCUS = 0                                                    # stała ostrość (0 = najdalej); DOBIERZ w podglądzie (+ / -)
                                                              # i NIE ZMIENIAJ po kalibracji obiektywu
@@ -89,6 +90,10 @@ class Logitech:
 
 def zmierz_opoznienie(n_zmian=12):
     cap = otworz()
+    # stała ekspozycja tylko na czas pomiaru: auto-ekspozycja wyrównuje jasność czarnego/białego ekranu
+    # i próg 128 łapał zmianę w złym momencie (5.11: tylko 6/12 udanych, min 12 ms < czas klatki)
+    cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 1)                   # V4L2: 1 = ręczna, 3 = automatyczna
+    cap.set(cv2.CAP_PROP_EXPOSURE, 150)                      # ok. 15 ms (jednostki 0.1 ms)
     cv2.namedWindow("miganie", cv2.WINDOW_NORMAL)
     cv2.setWindowProperty("miganie", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
     wyniki, bialy = [], False
