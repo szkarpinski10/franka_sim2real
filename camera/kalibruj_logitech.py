@@ -1,13 +1,8 @@
-"""kalibruj_logitech.py – kalibracja obiektywu Logitecha szachownicą (ogniskowa, środek obrazu, zniekształcenia).
+"""kalibruj_logitech.py - kalibracja obiektywu Logitecha szachownicą.
 
-Uruchom:  python kalibruj_logitech.py
-    s = zapisz klatkę (tylko gdy szachownica wykryta – zielone punkty),  k = policz kalibrację,  q = koniec.
-    Zbierz 15-25 zdjęć: szachownica w różnych miejscach obrazu (też w rogach), pod różnymi kątami (do ok. 45 st.),
-    blisko i daleko. Szachownica musi być płaska (naklejona na sztywną płytę).
-Tylko liczenie z już zapisanych zdjęć:  python kalibruj_logitech.py --licz
-Wynik: logitech.json (K, dist) – używa go logitech.py.
-WAŻNE: kalibracja jest ważna tylko dla tej ostrości (FOCUS w logitech.py) i tej rozdzielczości.
-Wymaga:  pip install opencv-python
+s = zapisz klatkę, k = policz, q = koniec; samo liczenie z zapisanych zdjęć: --licz.
+Potrzeba 15-25 zdjęć szachownicy w różnych miejscach obrazu i pod różnymi kątami. Wynik (logitech.json) jest
+ważny tylko dla tej ostrości (FOCUS w logitech.py) i rozdzielczości.
 """
 import argparse
 import glob
@@ -21,8 +16,8 @@ import logitech
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 FOLDER = os.path.join(DIR, "dane_logitech")
-SZACHOWNICA = (9, 6)                                         # WEWNĘTRZNE narożniki (pola 10 x 7 -> 9 x 6) – WPISZ SWOJE
-POLE = 0.025                                                 # bok jednego pola [m] – ZMIERZ suwmiarką
+SZACHOWNICA = (9, 6)                                         # WEWNĘTRZNE narożniki (pola 10 x 7 -> 9 x 6) - WPISZ SWOJE
+POLE = 0.025                                                 # bok jednego pola [m] - ZMIERZ suwmiarką
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--licz", action="store_true", help="bez kamery: policz z zapisanych zdjęć")
@@ -55,10 +50,10 @@ def licz():
         raise SystemExit("Za mało zdjęć (potrzeba co najmniej 10, najlepiej 15-25).")
     rms, K, dist, rvecs, tvecs = cv2.calibrateCamera(obj_pts, img_pts, (logitech.W, logitech.H), None, None)
     print(f"Błąd reprojekcji: {rms:.3f} px   (dobrze < 0.5 px, źle > 1 px)")
-    print("Błąd każdego zdjęcia (duży = rozmazane / źle wykryte – usuń plik i policz jeszcze raz):")
+    print("Błąd każdego zdjęcia (duży = rozmazane / źle wykryte - usuń plik i policz jeszcze raz):")
     for p, o, i, r, t in zip(uzyte, obj_pts, img_pts, rvecs, tvecs):
         rzut, _ = cv2.projectPoints(o, r, t, K, dist)
-        # reshape: OpenCV 5 daje narożniki jako (N, 2), a projectPoints (N, 1, 2) – bez tego odejmowanie robi N x N
+        # reshape: OpenCV 5 daje narożniki jako (N, 2), a projectPoints (N, 1, 2) - bez tego odejmowanie robi N x N
         blad = np.sqrt(np.mean(np.sum((rzut.reshape(-1, 2) - i.reshape(-1, 2)) ** 2, axis=1)))
         print(f"  {os.path.basename(p)}  {blad:.3f} px" + ("   <-- podejrzane" if blad > 2 * rms else ""))
     print(f"fx = {K[0, 0]:.1f}  fy = {K[1, 1]:.1f}  cx = {K[0, 2]:.1f}  cy = {K[1, 2]:.1f}")
@@ -74,7 +69,7 @@ if args.licz:
     raise SystemExit
 
 os.makedirs(FOLDER, exist_ok=True)
-cap = logitech.otworz()                                      # surowy obraz – kalibrujemy właśnie zniekształcenia
+cap = logitech.otworz()                                      # surowy obraz - kalibrujemy właśnie zniekształcenia
 n = len(glob.glob(os.path.join(FOLDER, "*.png")))
 try:
     while True:
@@ -96,7 +91,7 @@ try:
             break
         if key == ord("s"):
             if narozniki(gray) is None:
-                print("Szachownica nie wykryta – nie zapisuję")
+                print("Szachownica nie wykryta - nie zapisuję")
                 continue
             cv2.imwrite(os.path.join(FOLDER, f"zdjecie_{n:02d}.png"), img)
             n += 1

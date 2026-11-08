@@ -1,18 +1,8 @@
-"""kamery.py – obie kamery w tle + fuzja; daje pozycje kostek dla policy.
+"""kamery.py - obie kamery w osobnych wątkach i fuzja pomiarów; pozycje kostek dla policy.
 
-Jako moduł (pętla robota, run_robot.py):
-    from kamery import Kamery
-    kamery = Kamery()
-    kostki = kamery.cubes_position_table(tcp_pos, tcp_quat, trzyma)   # {"cube_1": (pos, quat), ...} albo None
-    kamery.zamknij()
-Każda kamera ma swój wątek: bierze klatkę, wykrywa tagi, przelicza kostki na układ bazy i wkłada do fuzji.
-Pętla robota (50 Hz) nigdy nie czeka na kamerę (ok. 10 kl/s) – bierze ostatni wynik fuzji.
-Kamera na chwytaku potrzebuje pozy TCP w chwili zdjęcia: dostaje ją z pętli robota (cubes_position_table
-zapisuje pozę przy każdym wywołaniu), więc wątek kamery sam nie rozmawia z robotem.
-
-Sprawdzenie przy robocie (robot stoi, bez sterowania):  python kamery.py
-    co 0.5 s wypisuje każdą kostkę z obu kamer osobno i różnicę między nimi (dobrze: < 1.5 cm).
-Wymaga:  kalibracja.json, logitech.json, statyw.json
+Pętla robota nie czeka na kamery, bierze ostatni wynik fuzji. Każdy pomiar dostaje pozę TCP z chwili zdjęcia
+(historia póz), bo obraz przychodzi z opóźnieniem.
+Sprawdzenie przy robocie (robot stoi):  python kamery.py   (kostki z obu kamer i różnica między nimi)
 """
 import json
 import os
@@ -27,14 +17,11 @@ from fuzja import Fuzja, KOSTKI, poza, usrednij_yaw
 DIR = os.path.dirname(os.path.abspath(__file__))
 CUBE_TAG = 0.035
 V_MAX_REKA = 0.05                                            # [m/s] szybciej -> zdjęcie z chwytaka rozmyte/nieaktualne
-W_MAX_REKA = 0.3                                             # [rad/s] tak samo dla obrotu chwytaka (5.11: przy obracaniu
-                                                             # ręką kamera na chwytaku myliła się o 4-5 cm)
-POZA_SWIEZA = 0.05                                           # [s] w historii nie ma pozy tak blisko chwili zdjęcia -> pomijamy
-# opóźnienie obrazu = od zdjęcia do odebrania klatki. Wynik dostaje pozę TCP z CHWILI ZDJĘCIA (z historii), bo przy
-# czerwonej w chwytaku 100 ms różnicy to kilka cm (MuJoCo: opóźnienie 40 ms -> 26/30 wież, 100 ms -> 18/30).
+W_MAX_REKA = 0.3                                             # [rad/s] tak samo dla obrotu chwytaka
+POZA_SWIEZA = 0.05                                           # [s] brak pozy TCP tak blisko chwili zdjęcia -> pomijamy
+# opóźnienie obrazu: od zdjęcia do odebrania klatki
 OPOZNIENIE_REKA = 0.06                                       # [s] tylko gdy RealSense nie poda czasu zdjęcia
-OPOZNIENIE_STATYW = 0.06                                     # [s] pomiar 5.11: 28 ms, ale niepewny (6/12 udanych, min 12 ms
-                                                             # < czas klatki); typowo 50-100 ms; ±40 ms bez znaczenia (MuJoCo)
+OPOZNIENIE_STATYW = 0.12                                     # [s] do zmierzenia: python logitech.py --opoznienie
 
 
 class Kamery:
@@ -69,7 +56,7 @@ class Kamery:
         return self.fuzja.kostki(T, trzyma, time.perf_counter())
 
     def _wloz(self, kamera, pomiary, t, T_base_tcp):
-        for nazwa, lista in pomiary.items():                 # lista = [(środek, yaw)] – po jednym z każdej ściany
+        for nazwa, lista in pomiary.items():                 # lista = [(środek, yaw)] - po jednym z każdej ściany
             pos = np.mean([p for p, _ in lista], axis=0)
             yaw = usrednij_yaw([y for _, y in lista])
             self.fuzja.dodaj(kamera, nazwa, pos, yaw, t, T_base_tcp)
@@ -118,7 +105,7 @@ class Kamery:
                     nazwa = next((k for k, ids in TAGI.items() if d.tag_id in ids), None)
                     if nazwa is not None and tag_wiarygodny(T_base_cam, d.pose_R):
                         pomiary.setdefault(nazwa, []).append(srodek_i_yaw(T_base_cam, d.pose_R, d.pose_t))
-                self._wloz("statyw", pomiary, t, self.poza(t))  # poza TCP – tylko dla czerwonej w chwytaku
+                self._wloz("statyw", pomiary, t, self.poza(t))  # poza TCP - dla kostki w chwytaku
         finally:
             kam.zamknij()
 

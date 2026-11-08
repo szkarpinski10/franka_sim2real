@@ -1,18 +1,8 @@
-"""kamera_kostki.py – pozycje i obroty kostek w układzie bazy robota z kamery na chwytaku.
+"""kamera_kostki.py - pozycje i obroty kostek w układzie bazy z kamery na chwytaku (RealSense D435i).
 
-Jako moduł (dla kodu robota):
-    from kamera_kostki import KameraKostki
-    kam = KameraKostki()                       # wczytuje kalibracja.json, włącza kamerę
-    kostki = kam.zmierz(poza_tcp(panda))       # robot MUSI stać; {"cube_1": (pos, quat), ...} tylko widoczne kostki
-    kam.zamknij()
-Jako podgląd (przy robocie, robot stoi lub jest przesuwany ręką):  python kamera_kostki.py
-    pokazuje na żywo pozycje kostek w układzie bazy – połóż kostkę w zmierzonym linijką miejscu i porównaj.
-    python kamera_kostki.py --bez-robota   – bez robota, pozycje względem TCP (tylko do sprawdzenia wykrywania).
-
-Kostki jak w Isaacu: cube_1 = niebieska (tagi 0-5), cube_2 = czerwona (6-11), cube_3 = zielona (12-17).
-Środek kostki = środek tagu przesunięty o pół boku w głąb kostki (oś z tagu). Działa z każdej widocznej ściany.
-Obrót: tylko wokół pionu (kostka leży na stole), jako kwaternion x, y, z, w (jak w robot_franka.py).
-Wymaga:  kalibracja.json (z kalibruj_handeye.py),  pip install pyrealsense2 opencv-python pupil-apriltags
+Środek kostki = środek tagu przesunięty o pół boku w głąb kostki. Kostki: cube_1 niebieska (tagi 0-5),
+cube_2 czerwona (6-11), cube_3 zielona (12-17). Kwaterniony x, y, z, w.
+Podgląd:  python kamera_kostki.py   (--bez-robota: pozycje względem kamery)
 """
 import argparse
 import json
@@ -23,17 +13,18 @@ import numpy as np
 import pupil_apriltags
 import pyrealsense2 as rs
 
+from fuzja import usrednij_yaw, yaw_to_quat
+
 DIR = os.path.dirname(os.path.abspath(__file__))
 W, H, FPS = 1280, 720, 30                                    # ten sam tryb co przy kalibracji (zbierz_handeye.py)
 EXPOSURE = None                                              # None = automatyczna
-CUBE_TAG = 0.035                                             # bok CZARNEGO kwadratu tagu na kostce [m] – WPISZ ZMIERZONY
+CUBE_TAG = 0.035                                             # bok czarnego kwadratu tagu na kostce [m]
 HALF = 0.025                                                 # pół boku kostki [m]
 MIN_MARGIN = 30                                              # słabsze wykrycia odrzucamy (pewność wykrycia tagu)
 KOSTKI = {"cube_1": range(0, 6), "cube_2": range(6, 12), "cube_3": range(12, 18)}
 KOLOR = {"cube_1": "niebieska", "cube_2": "czerwona", "cube_3": "zielona"}
-# kostka wygląda tak samo co 90 st., więc obrót podajemy w zakresie [YAW_OD, YAW_OD + 90 st.).
-# YAW_OD = 0 -> kostka postawiona pod 45 st. (CUBES_YAW) daje ok. 45 st., jak QUAT_ZERO w robot_franka.py.
-# Kostka postawiona blisko 0 st. będzie skakać między ~0 a ~90 st. – stawiaj pod 45 st.
+# kostka wygląda tak samo co 90 st., więc obrót podajemy w zakresie [YAW_OD, YAW_OD + 90 st.)
+# (fuzja.py i tak przelicza go na swój zakres)
 YAW_OD = 0.0
 
 
@@ -46,14 +37,9 @@ def poza_tcp(panda):
         return np.array(panda.get_pose())
 
 
-def yaw_to_quat(yaw):
-    return np.array([0.0, 0.0, np.sin(yaw / 2), np.cos(yaw / 2)])
-
-
 def tag_wiarygodny(T_base_cam, R_cam_tag, max_kat=np.radians(20)):
-    """Czy orientacja tagu ma sens dla kostki leżącej na stole: oś z tagu (w głąb kostki) skierowana w dół
-    (górna ścianka) albo poziomo (boczna). AprilTag pod niekorzystnym kątem ma dwie możliwe orientacje
-    ("more than one new minima found") i czasem wybiera złą – środek kostki ląduje wtedy 4-5 cm obok (5.11)."""
+    """Czy orientacja tagu pasuje do kostki leżącej na stole: oś z tagu w dół (górna ścianka) albo poziomo (boczna).
+    Tag widziany pod złym kątem ma dwie możliwe orientacje i czasem wykrywa się ta zła."""
     nz = (T_base_cam[:3, :3] @ R_cam_tag[:, 2])[2]           # pionowa składowa osi z tagu w bazie
     return nz < -np.cos(max_kat) or abs(nz) < np.sin(max_kat)
 
@@ -66,13 +52,6 @@ def srodek_i_yaw(T_base_cam, R_cam_tag, t_cam_tag):
     os_pozioma = R[:, np.argmin(np.abs(R[2, :]))]            # najbardziej pozioma oś tagu = krawędź kostki
     yaw = np.arctan2(os_pozioma[1], os_pozioma[0])
     return srodek, (yaw - YAW_OD) % (np.pi / 2) + YAW_OD
-
-
-def usrednij_yaw(yaws):
-    """Średnia kątów, które powtarzają się co 90 st. (średnia na kole dla 4 * kąt)."""
-    yaws = np.asarray(yaws)
-    y = np.arctan2(np.sin(4 * yaws).mean(), np.cos(4 * yaws).mean()) / 4
-    return (y - YAW_OD) % (np.pi / 2) + YAW_OD
 
 
 class KameraKostki:
@@ -110,7 +89,7 @@ class KameraKostki:
                 if d.tag_id < 18 and d.decision_margin >= MIN_MARGIN]
 
     def pomiary(self, tagi, T_base_tcp):
-        """{nazwa kostki: [(środek, yaw), ...]} – jeden wpis na każdy widoczny tag tej kostki."""
+        """{nazwa kostki: [(środek, yaw), ...]} - jeden wpis na każdy widoczny tag tej kostki."""
         T_base_cam = np.asarray(T_base_tcp) @ self.T_tcp_cam
         out = {}
         for d in tagi:
@@ -121,17 +100,17 @@ class KameraKostki:
         return out
 
     def zmierz(self, T_base_tcp, n_klatek=10):
-        """Pozycje kostek z kilku klatek (mediana). Robot musi stać – T_base_tcp = panda.get_pose()."""
+        """Pozycje kostek z kilku klatek (mediana). Robot musi stać - T_base_tcp = panda.get_pose()."""
         zebrane = {}
         for _ in range(n_klatek):
             for nazwa, lista in self.pomiary(self.wykryj(self.klatka()), T_base_tcp).items():
                 zebrane.setdefault(nazwa, []).extend(lista)
         wynik = {}
         for nazwa, lista in zebrane.items():
-            if len(lista) < n_klatek // 2:                   # widoczna tylko na części klatek – niepewna
+            if len(lista) < n_klatek // 2:                   # widoczna tylko na części klatek - niepewna
                 continue
             pos = np.median([p for p, _ in lista], axis=0)
-            wynik[nazwa] = (pos, yaw_to_quat(usrednij_yaw([y for _, y in lista])))
+            wynik[nazwa] = (pos, yaw_to_quat(usrednij_yaw([y for _, y in lista], YAW_OD)))
         return wynik
 
     def zamknij(self):
@@ -146,7 +125,7 @@ if __name__ == "__main__":
     panda = None
     if not args.bez_robota:
         import panda_py
-        panda = panda_py.Panda("172.16.0.2")                 # adres robota (jak w robot_franka.py)
+        panda = panda_py.Panda("172.16.0.2")
     kam = KameraKostki(None if args.bez_robota else os.path.join(DIR, "kalibracja.json"))
     uklad = "względem kamery" if args.bez_robota else "w układzie bazy"
     try:
@@ -162,7 +141,7 @@ if __name__ == "__main__":
             linie = [f"kostki {uklad} (x, y, z [cm], obrot [st.])   q = koniec"]
             for nazwa, lista in sorted(kam.pomiary(tagi, T_base_tcp).items()):
                 pos = np.mean([p for p, _ in lista], axis=0)
-                yaw = usrednij_yaw([y for _, y in lista])
+                yaw = usrednij_yaw([y for _, y in lista], YAW_OD)
                 linie.append(f"{nazwa} {KOLOR[nazwa]:9s} {np.round(pos * 100, 1)}  {np.degrees(yaw):5.1f}  "
                              f"(scian: {len(lista)})")
             for i, txt in enumerate(linie):

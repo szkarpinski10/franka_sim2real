@@ -1,19 +1,13 @@
-"""chwytak_proces.py – chwytak Pandy w OSOBNYM PROCESIE (uruchamiany z robot_franka.py).
+"""chwytak_proces.py - chwytak w osobnym procesie (uruchamiany z robot_franka.py).
 
-Dlaczego proces, a nie wątek: funkcje chwytaka z panda_py (read_once, move, grasp) czekają na chwytak, NIE puszczając
-GIL-a – cały Python stoi (5.11: drugi wątek dostawał 2% czasu; read_once średnio 57 ms, max 100 ms, grasp ok. 0.5 s).
-W pętli robota dawało to 10-15 kroków/s zamiast 50 (drgania), a w wątku w tle – kamery bez ani jednej klatki.
-Osobny proces ma własny GIL; z pętlą robota wymienia tylko liczby we wspólnej pamięci (multiprocessing.Value).
-Jedno połączenie z chwytakiem: drugie Gripper(IP) odcina pierwsze.
+Funkcje chwytaka z panda_py blokują cały Python na czas odczytu/ruchu, więc w tym samym procesie spowalniały
+pętlę robota i kamery. Z pętlą robota wymieniamy tylko liczby we wspólnej pamięci.
 """
 import time
 
 
 def petla(ip, cel_otwarty, jest_otwarty, szerokosc, predkosc, v_palcow=0.1):
-    """cel_otwarty: czego chce policy (1/0); jest_otwarty: stan po ostatniej komendzie; szerokosc [m]; predkosc
-    jednego palca [m/s]; v_palcow = prędkość rozstawu palców przy move/grasp [m/s] (z profilu w robot_franka.py). Jedna komenda albo jeden odczyt naraz – opóźnienie komendy najwyżej jeden odczyt (ok. 0.1 s)."""
-    # panda_py ładujemy dopiero TU, w procesie potomnym: jeśli proces rodzica załadował panda_py przed fork,
-    # panda.get_state() w rodzicu zawiesza się na zawsze (sprawdzone 5.11)
+    # panda_py importujemy dopiero tutaj, w procesie potomnym
     from panda_py import libfranka
     gripper = libfranka.Gripper(ip)
     prev_width, prev_t = None, None

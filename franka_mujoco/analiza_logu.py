@@ -1,9 +1,8 @@
-"""analiza_logu.py – szybka analiza epizodu z robota (logi/epizod_*.npz z run_robot.py).
+"""analiza_logu.py - analiza epizodu z robota (logi z run_robot.py).
 
-Uruchom (z franka_mujoco/):  python analiza_logu.py            (ostatni log)
-                             python analiza_logu.py logi/epizod_20261105_131500.npz
-Pokazuje: równość pętli, prędkości i przyspieszenia stawów, "nerwowość" policy (zmiany akcji i kierunku ruchu),
-pracę chwytaka i najgwałtowniejsze chwile – z porównaniem do symulacji (MuJoCo, ten sam model).
+Uruchom:  python analiza_logu.py                       (najnowszy log)
+          python analiza_logu.py logi/p1_20261105_131500.npz
+Pokazuje równość pętli, prędkości i przyspieszenia stawów, zmiany akcji policy i pracę chwytaka.
 """
 import glob
 import os
@@ -12,7 +11,7 @@ import sys
 import numpy as np
 
 DIR = os.path.dirname(os.path.abspath(__file__))
-plik = sys.argv[1] if len(sys.argv) > 1 else sorted(glob.glob(os.path.join(DIR, "logi", "epizod_*.npz")))[-1]
+plik = sys.argv[1] if len(sys.argv) > 1 else max(glob.glob(os.path.join(DIR, "logi", "*.npz")), key=os.path.getmtime)
 d = np.load(plik)
 t, q, dq, a = d["t"], d["q"], d["dq"], d["action"]
 fingers, trzyma = d["fingers"], d["trzyma"]

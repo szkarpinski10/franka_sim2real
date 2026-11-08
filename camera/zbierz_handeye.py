@@ -1,20 +1,14 @@
-"""zbierz_handeye.py – zbieranie danych do kalibracji hand-eye (gdzie jest kamera względem TCP).
+"""zbierz_handeye.py - zbieranie danych do kalibracji hand-eye.
 
-Uruchom (przy robocie, Desk: stawy odblokowane, FCI włączone):  python zbierz_handeye.py
-Przygotowanie: tag ID 20 przyklejony NIERUCHOMO na stole.
-Co robić: ustaw robota w 15-20 różnych pozycjach (inna wysokość, wyraźnie inne nachylenie i obrót chwytaka,
-tag zawsze w kadrze). W każdej pozycji puść robota, poczekaj aż stoi i naciśnij SPACJĘ.
-Zapisuje się para: zdjęcie + poza TCP robota (+ poza tagu z kamery) pod tym samym numerem.
-Klawisze:  spacja = zapisz pozycję,  q = koniec.
-Wynik: folder dane_handeye/ (zdjęcia, pozy.npz, kamera.json). Kalibrację liczymy potem w domu.
-Wymaga:  pip install pyrealsense2 opencv-python pupil-apriltags  + panda_py pasujące do robota
+Tag 20 leży nieruchomo na stole. Robota ustawiamy ręką w 15-20 różnych pozycjach (różna wysokość, nachylenie
+i obrót, tag w kadrze) i w każdej naciskamy spację (q = koniec). Zdjęcia i pozy trafiają do dane_handeye/.
 """
-import json                                                  # zapis parametrów kamery
+import json
 import os
 
 import cv2
 import numpy as np
-import panda_py                                              # robot
+import panda_py
 import pupil_apriltags
 import pyrealsense2 as rs
 
@@ -22,7 +16,7 @@ IP = "172.16.0.2"                                            # adres robota (jak
 W, H, FPS = 1280, 720, 30                                    # tryb koloru (ten sam co w podglad_tagow.py)
 EXPOSURE = None                                              # None = automatyczna
 CALIB_ID = 20                                                # tag na stole (ID 0-17 są na kostkach)
-CALIB_SIZE = 0.070                                           # bok CZARNEGO kwadratu tagu ID 20 [m] – WPISZ ZMIERZONY
+CALIB_SIZE = 0.070                                           # bok CZARNEGO kwadratu tagu ID 20 [m] - WPISZ ZMIERZONY
 TEACHING = True                                              # True = robota można przesuwać ręką (tryb nauczania)
 OUT_DIR = "dane_handeye"
 
@@ -31,9 +25,9 @@ panda = panda_py.Panda(IP)
 if TEACHING:
     try:
         panda.teaching_mode(True)
-        print("Tryb nauczania WŁĄCZONY – robota można przesuwać ręką.")
+        print("Tryb nauczania WŁĄCZONY - robota można przesuwać ręką.")
     except Exception as e:                                   # gdyby nie działał: ustawiaj robota z Desk
-        print(f"Tryb nauczania nie zadziałał ({e}) – ustawiaj robota z Desk.")
+        print(f"Tryb nauczania nie zadziałał ({e}) - ustawiaj robota z Desk.")
 
 # ---------- kamera ----------
 pipe = rs.pipeline()
@@ -96,15 +90,15 @@ try:
             break
         if key == ord(" "):
             if not tag:
-                print("Tag niewidoczny – ustaw robota tak, żeby tag był w kadrze.")
+                print("Tag niewidoczny - ustaw robota tak, żeby tag był w kadrze.")
                 continue
             T_tcp, q, dq = stan_robota()
             if np.abs(dq).max() > 0.01:                      # zdjęcie i poza muszą być z tej samej chwili
-                print(f"Robot jeszcze się rusza ({np.abs(dq).max():.3f} rad/s) – poczekaj, aż stanie.")
+                print(f"Robot jeszcze się rusza ({np.abs(dq).max():.3f} rad/s) - poczekaj, aż stanie.")
                 continue
             if q_joints and np.abs(q - q_joints[-1]).max() < 1e-4:
                 print("NIE ZAPISANO: pozycja robota taka sama jak przy poprzednim zdjęciu. Przesuń robota; "
-                      "jeśli przesunąłeś, a to się powtarza – robot nie podaje nowej pozycji (zakończ q i uruchom od nowa).")
+                      "jeśli przesunąłeś, a to się powtarza - robot nie podaje nowej pozycji (zakończ q i uruchom od nowa).")
                 continue
             i = len(T_base_tcp)
             cv2.imwrite(os.path.join(OUT_DIR, f"zdjecie_{i:02d}.png"), img)

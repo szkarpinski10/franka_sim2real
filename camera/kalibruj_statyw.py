@@ -1,17 +1,8 @@
-"""kalibruj_statyw.py – gdzie stoi Logitech względem bazy robota (kalibracja kamery na statywie).
+"""kalibruj_statyw.py - położenie Logitecha względem bazy robota (statyw.json).
 
-Pomysł: tag 20 leży na stole i widzą go OBIE kamery naraz. Kamera na chwytaku jest już skalibrowana (kalibracja.json),
-więc z niej wiemy, gdzie są narożniki tagu w układzie BAZY. Logitech widzi te same narożniki w SWOIM układzie.
-Szukamy obrotu i przesunięcia, które najlepiej nakłada jedne punkty na drugie (metoda Kabscha, jak dopasowanie
-dwóch chmur punktów). Każde położenie tagu daje 4 narożniki; 3-5 różnych położeń na stole daje dokładniejszy wynik.
-
-Uruchom (robot stoi, bez sterowania; Logitech ostatecznie ustawiony – po kalibracji statywu NIE ruszać):
-    python kalibruj_statyw.py
-    połóż tag 20 tak, żeby widziały go obie kamery -> s (zbiera ~1 s klatek z obu kamer),
-    przesuń tag w inne miejsce (robota można przestawić ręką, żeby kamera na chwytaku go widziała) -> s, ...
-    k = policz i zapisz,  q = koniec.
-Wynik: statyw.json (T_base_cam 4 x 4) – używa go kamery.py.
-Wymaga:  kalibracja.json, logitech.json, panda_py, pyrealsense2, opencv-python, pupil-apriltags
+Tag 20 widzą naraz obie kamery. Kamera na chwytaku jest skalibrowana, więc daje narożniki tagu w układzie bazy,
+a Logitech te same narożniki w swoim układzie. Przekształcenie liczymy metodą Kabscha z 3-5 położeń tagu.
+s = zbierz położenie, k = policz i zapisz, q = koniec. Po kalibracji statywu nie ruszamy.
 """
 import json
 import os
@@ -60,7 +51,7 @@ panda = panda_py.Panda(IP)
 reka = KameraKostki()
 logi = Logitech()
 if logi.cam_params is None:
-    raise SystemExit("Brak logitech.json – najpierw kalibruj_logitech.py")
+    raise SystemExit("Brak logitech.json - najpierw kalibruj_logitech.py")
 pkt_baza, pkt_logi = [], []                                  # narożniki tagu: w bazie (z ręki) i względem Logitecha
 
 try:
@@ -87,7 +78,7 @@ try:
                     z_reki.append((T_base_cam_r @ Tr @ NAROZNIKI)[:3])
                     z_logi.append((Tl @ NAROZNIKI)[:3])
             if len(z_reki) < N_KLATEK // 2:
-                print(f"Tag widoczny w obu kamerach tylko na {len(z_reki)} / {N_KLATEK} klatkach – nie zapisuję")
+                print(f"Tag widoczny w obu kamerach tylko na {len(z_reki)} / {N_KLATEK} klatkach - nie zapisuję")
                 continue
             pkt_baza.extend(np.median(z_reki, axis=0).T)     # mediana klatek: odporna na pojedyncze złe wykrycia
             pkt_logi.extend(np.median(z_logi, axis=0).T)

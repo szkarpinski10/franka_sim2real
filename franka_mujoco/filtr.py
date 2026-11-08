@@ -21,7 +21,7 @@ def punkty_kamery(T_tcp_cam, wymiary=(0.12, 0.04, 0.035)):
 
 class Filtr_CBF:
     def __init__(self, stol_z=0.0, h_min=0.006, alfa=0.2, t_br=0.12, vel=0.8, dt=0.02, kamery=()):
-        """kamery = poza każdej kamery na chwytaku względem TCP (4 x 4) – ich bryły dochodzą do punktów dłoni."""
+        """kamery = poza każdej kamery na chwytaku względem TCP (4 x 4) - ich bryły dochodzą do punktów dłoni."""
         self.m = mujoco.MjModel.from_xml_path(XML)
         self.d = mujoco.MjData(self.m)
         self.stol_z, self.h_min, self.alfa, self.t_br, self.lim = stol_z, h_min, alfa, t_br, vel * dt

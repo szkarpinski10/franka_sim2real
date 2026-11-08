@@ -173,3 +173,47 @@ ZMIANY W KODZIE – dziennik (co, gdzie, dlaczego). Najnowsze na dole.
     franka_mujoco/analiza_logu.py (analiza logu z robota: pętla, prędkości, przyspieszenia, nerwowość policy).
     Sprawdzone: run_robot.py z udawanym robotem/chwytakiem/kamerami – pętla 60 ms równo, log, wykrycie odruchu
     (przez raise_error, przy is_moving = True jak na robocie), powrót do HOME.
+
+=== 2026-11-06 .. 11-08 ===
+
+28. Model nowy_B (sk_franka d878ee9, run 2026-11-05_18-04-46, checkpoint 2499): trening od razu w tempie robota –
+    decimation 6 -> krok 60 ms, velocity_limit 0.3 rad/s, palce 0.03 m/s każdy (move/grasp: rozstaw 0.06 m/s).
+    MuJoCo (test_plynnosc.py --robot, 100 układów, filtr 0.05): 91/100 wież, kontakt ze stołem 3/100, 10.7 rad/s2.
+    Profile tempo3 / pelne / nowy_A usunięte z robot_franka.py (zostały tylko stałe nowy_B).
+
+29. Filtr stołu h_min 2 cm (MuJoCo nowy_B, 100 układów): 1.5 cm -> 86 wież, kontakt palca ze stołem 8;
+    2 cm -> 89 / 2; 2.5 cm -> 80 / 1 (palce nie sięgają kostki).
+
+30. robot_franka.py – progi kolizji jak w przykładach libfranka (setDefaultBehavior): od 10 Nm / 10 N kontakt,
+    od 20 Nm / 20 N kolizja -> robot staje. panda_py sam ich nie ustawia, a robot pamięta ostatnie ustawione do restartu.
+
+31. Chwytak w osobnym procesie (chwytak_proces.py): funkcje chwytaka panda_py (read_once, move, grasp) czekają na
+    chwytak bez puszczania GIL-a (5.11: drugi wątek dostawał 2% czasu; read_once śr. 57 ms, max 100 ms, grasp ok.
+    0.5 s) – pętla robota robiła 10-15 kroków/s, kamery w tle nie dostawały klatek. panda_py ładowany dopiero w
+    procesie potomnym: import przed fork zawieszał panda.get_state() w rodzicu.
+
+32. Kamery (5.11 na robocie): kamera na chwytaku przy obracaniu ręką myliła się o 4-5 cm -> pomiar tylko, gdy
+    TCP < 0.05 m/s i < 0.3 rad/s. AprilTag pod niekorzystnym kątem ma dwie możliwe orientacje i czasem wybiera złą
+    (środek kostki 4-5 cm obok) -> tag_wiarygodny. Pojedyncze złe klatki (1.5-5 cm) -> skok pozycji > 3 cm przyjmowany
+    dopiero po potwierdzeniu drugim pomiarem. MuJoCo: opóźnienie obrazu 40 ms -> 26/30 wież, 100 ms -> 18/30, stąd
+    poza TCP z chwili zdjęcia (historia póz). Zakres obrotu kostki [45, 135) st. (MuJoCo 60 układów: 50/60; [0, 90):
+    41/60). Opóźnienie Logitecha: pomiar 5.11 dał 28 ms, ale niepewny (6/12 udanych, auto-ekspozycja) -> stała
+    ekspozycja w pomiarze; tymczasowo 0.12 s (dane z internetu dla kamer USB z OpenCV: 100-170 ms).
+
+33. Policy2 = sk_franka d41dc24, run 2026-11-06_19-01-50, checkpoint 3200: start z wieżą czerwona-na-niebieskiej,
+    nagrody policy1 z kostkami cube_3/cube_2, kara tower_destroyed -300 od 15000 kroków. MuJoCo --p2 --robot:
+    78/100. Cała sekwencja p1 -> HOME -> p2 (prawdziwe pozycje kostek): 52/100.
+    Próby poprawy (wszystkie bez zysku): lifting minimal_height 0.13 (nie uczył się podnosić), start jak po policy1
+    (xy_rand 0.015, min_separation 0.08: 58/100, ale 2x więcej kontaktów ze stołem), nagroda lifting_object_high 0.13
+    z curriculum (nagroda ~0.03 przy ~2 za zwykłe podnoszenie – bez wpływu, przerwane).
+
+34. fuzja.py – trzymana kostka jako parametr Fuzja(trzymana): wcześniej na sztywno czerwona, więc w policy2 zielona
+    w chwytaku "zostawała na stole". MuJoCo (sekwencja z udawanymi kamerami, 50 układów): z poprawką 28/50, bez 0/50.
+    run_robot.py z menu: h HOME, 1 policy1, 2 policy2, 3 obie, p tryb w powietrzu, q koniec; nowa fuzja na każdy epizod.
+
+35. Test całej sekwencji z kamerami (test_plynnosc.py --policy2 --kamery, 100 układów): policy1 84/100, cała wieża
+    46/100 (prawdziwe pozycje: 90 i 52 -> kamery kosztują ok. 6 pkt). Porażki: 50 z 54 to strącenie wieży przy
+    odkładaniu. Odjazd pionowo w górę po postawieniu zamiast oddania sterowania policy: gorzej (84 -> 71, 46 -> 40).
+
+36. Porządki: usunięte camera/do_home.py (menu h w run_robot), robot_p1_p2.py i test_kamery_sim.py (zastąpione
+    opcjami --policy2 i --kamery w test_plynnosc.py), stare modele; komentarze w kodzie skrócone, historie tutaj.

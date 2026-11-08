@@ -1,15 +1,8 @@
-"""sprawdz_kalibracje.py – robot POWOLI jedzie nad kostki wykryte kamerą; sprawdzasz na oko, czy trafia.
+"""sprawdz_kalibracje.py - robot powoli jedzie nad kostki wykryte kamerą, a my sprawdzamy, czy trafia.
 
-Uruchom (przy robocie, Desk: stawy odblokowane, FCI włączone, PRZYCISK AWARYJNY POD RĘKĄ):
-    python sprawdz_kalibracje.py
-Przebieg: HOME -> pomiar kostek kamerą -> dla każdej kostki (po Enterze) zjazd NAD_KOSTKA nad jej górę
--> patrzysz, czy palce są nad środkiem (zmierz linijką przesunięcie) -> pomiar z bliska dla porównania -> HOME.
-Kostki stawiaj w zakresie z treningu: x 0.35-0.55 m, y -0.20..0.20 m, obrócone o 45 st.
-Każdy ruch czeka na Enter. Cel poza bezpiecznym obszarem (OBSZAR) jest odrzucany.
-Ruch jak w do_home.py: własny sterownik stawów, najszybszy staw max V_MAX. Kąty stawów do celu liczymy krokami od
-aktualnej pozycji (ik_blisko), bo panda_py.ik / move_to_pose potrafią wybrać zupełnie inne ułożenie ramienia
-(np. staw 1 i 3 obrócone o ok. 2 rad) – wtedy robot jechałby wielkim łukiem.
-Wymaga:  kalibracja.json (z kalibruj_handeye.py), panda_py pasujące do robota
+HOME -> pomiar kostek -> dla każdej kostki zjazd 3 cm nad nią (po Enterze) -> pomiar z bliska -> HOME.
+Kąty stawów liczymy małymi krokami od aktualnej pozycji (ik_blisko), bo panda_py.ik potrafi wybrać zupełnie
+inne ułożenie ramienia. Cel poza bezpiecznym obszarem (OBSZAR) jest odrzucany.
 """
 import time
 
@@ -22,7 +15,7 @@ from kamera_kostki import HALF, KOLOR, KameraKostki, poza_tcp
 
 IP = "172.16.0.2"                                            # adres robota (jak w robot_franka.py)
 HOME = np.array([0.0, -0.3, 0.0, -2.0, 0.0, 1.7, 0.785])     # jak w robot_franka.py
-V_MAX = 0.1                                                  # największa prędkość stawu [rad/s] (jak w do_home.py)
+V_MAX = 0.1                                                  # największa prędkość stawu [rad/s] (wolniej niż reset_scene)
 MAX_ZMIANA = 1.2                                             # cel wymagający większego obrotu stawu [rad] odrzucamy
 NAD_KOSTKA = 0.03                                            # wysokość TCP nad górą kostki [m]
 OBSZAR = {"x": (0.25, 0.70), "y": (-0.35, 0.35), "z": (0.07, 0.60)}   # dozwolone cele TCP [m] (góra kostki: ok. 0.05)
@@ -81,7 +74,7 @@ def ik_blisko(T_cel, q0, iteracje=300):
 
 
 def jedz(q_cel):
-    """Płynny ruch stawów do q_cel (jak do_home.py / reset_scene w robot_franka.py)."""
+    """Płynny ruch stawów do q_cel (jak reset_scene w robot_franka.py)."""
     q0 = np.array(panda.get_robot().read_once().q)
     dq = np.asarray(q_cel) - q0
     T = max(1.875 * np.max(np.abs(dq)) / V_MAX, 1.0)
@@ -112,7 +105,7 @@ try:
     print(f"Kamera widzi z HOME {len(kostki)} kostki:")
     pokaz(kostki)
     if not kostki:
-        raise SystemExit("Nie widać żadnej kostki – sprawdź podglad_tagow.py / kamera_kostki.py.")
+        raise SystemExit("Nie widać żadnej kostki - sprawdź podglad_tagow.py / kamera_kostki.py.")
 
     for nazwa, (pos, quat) in sorted(kostki.items()):
         T = poza_tcp(panda)                                  # chwytak w dół jak w HOME, zmieniamy pozycję i obrót wokół pionu
@@ -126,13 +119,13 @@ try:
         print(f"\n{nazwa}: kostka {np.degrees(cube_yaw):.1f} st., chwytak {np.degrees(hand_yaw):.1f} st. "
               f"-> obracam chwytak o {np.degrees(obrot):+.1f} st.")
         if not w_obszarze(T[:3, 3]):
-            print(f"{nazwa}: cel {np.round(T[:3, 3] * 100, 1)} cm poza OBSZAR – pomijam.")
+            print(f"{nazwa}: cel {np.round(T[:3, 3] * 100, 1)} cm poza OBSZAR - pomijam.")
             continue
         q_teraz = np.array(panda.get_robot().read_once().q)
         q_cel, err = ik_blisko(T, q_teraz)
         if err > 1e-3 or np.max(np.abs(q_cel - q_teraz)) > MAX_ZMIANA:
             print(f"{nazwa}: nie umiem tam dojechać bez dużego obrotu stawów (błąd {err * 1000:.1f} mm, "
-                  f"obrót {np.max(np.abs(q_cel - q_teraz)):.2f} rad) – pomijam.")
+                  f"obrót {np.max(np.abs(q_cel - q_teraz)):.2f} rad) - pomijam.")
             continue
         if not zapytaj(f"\n{nazwa} ({KOLOR[nazwa]}): jadę do {np.round(T[:3, 3] * 100, 1)} cm "
                        f"({NAD_KOSTKA * 100:.0f} cm nad kostką)."):

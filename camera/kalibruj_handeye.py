@@ -1,15 +1,8 @@
-"""kalibruj_handeye.py – kalibracja hand-eye: gdzie jest kamera względem TCP robota.
+"""kalibruj_handeye.py - kalibracja hand-eye: położenie kamery względem TCP (T_tcp_cam).
 
-Uruchom (po zbierz_handeye.py, robot niepotrzebny):  python kalibruj_handeye.py
-                                    albo:            python kalibruj_handeye.py --pomin 3,7   (bez pozycji 3 i 7)
-Bierze dane_handeye/pozy.npz (poza TCP + poza tagu ID 20 z kamery) i liczy T_tcp_cam:
-metodą Parka-Martina (AX = XB), potem dopasowaniem, w którym tag 20 ma wyjść zawsze w tym samym miejscu (AX = YB).
-Liczone samym numpy – w OpenCV 5 nie ma już cv2.calibrateHandEye.
-Sprawdzenie: tag 20 leży nieruchomo na stole, więc z każdej pozycji robota powinien wyjść w TYM SAMYM miejscu
-w układzie bazy. Rozrzut tego miejsca = błąd kalibracji (dobrze: średnio < 5 mm, źle: > 10 mm).
-Pozycje z dużym błędem można pominąć (--pomin) albo zebrać dane jeszcze raz.
-Wynik: kalibracja.json (T_tcp_cam 4 x 4 – używa go kamera_kostki.py).
-Wymaga:  numpy
+Uruchom po zbierz_handeye.py:  python kalibruj_handeye.py [--pomin 3,7]
+Metoda Parka-Martina (AX = XB), potem dopasowanie, w którym tag 20 z każdej pozycji robota wypada w tym samym
+miejscu (AX = YB). Rozrzut tego miejsca to błąd kalibracji (dobrze: średnio < 5 mm). Wynik: kalibracja.json.
 """
 import argparse
 import json
@@ -92,11 +85,11 @@ print(f"Pozycji: {n}" + (f"  (pominięte: {sorted(pomin)})" if pomin else ""))
 if n < 5:
     raise SystemExit("Za mało pozycji (potrzeba co najmniej 5, najlepiej 15-20).")
 
-# czy pozycje są wystarczająco różne – hand-eye potrzebuje obrotów wokół różnych osi
+# czy pozycje są wystarczająco różne - hand-eye potrzebuje obrotów wokół różnych osi
 obroty = [kat(T_base_tcp[i][:3, :3].T @ T_base_tcp[j][:3, :3]) for i in range(n) for j in range(i + 1, n)]
 print(f"Największa różnica orientacji chwytaka między pozycjami: {max(obroty):.0f} st.")
 if max(obroty) < 30:
-    print("  UWAGA: pozycje mało się różnią obrotem (< 30 st.) – kalibracja może być niedokładna.")
+    print("  UWAGA: pozycje mało się różnią obrotem (< 30 st.) - kalibracja może być niedokładna.")
 
 # ---------- kalibracja ----------
 T_cam_tag = np.array([macierz(R, t) for R, t in zip(R_cam_tag, t_cam_tag)])
@@ -127,9 +120,9 @@ print(f"Kamera względem TCP: {np.round(T_tcp_cam[:3, 3] * 100, 1)} cm   (sprawd
 if blad.mean() < 0.005:
     print("OCENA: dobra kalibracja.")
 elif blad.mean() < 0.010:
-    print("OCENA: średnia – spróbuj pominąć podejrzane pozycje albo dozbierać dane.")
+    print("OCENA: średnia - spróbuj pominąć podejrzane pozycje albo dozbierać dane.")
 else:
-    print("OCENA: zła – zbierz dane jeszcze raz (sprawdź rozmiar tagu, czy kamera jest sztywno, czy robot stał).")
+    print("OCENA: zła - zbierz dane jeszcze raz (sprawdź rozmiar tagu, czy kamera jest sztywno, czy robot stał).")
 
 with open(args.wynik, "w") as f:
     json.dump({"T_tcp_cam": T_tcp_cam.tolist(), "metoda": nazwa, "pozycji": int(n), "pominiete": sorted(pomin),

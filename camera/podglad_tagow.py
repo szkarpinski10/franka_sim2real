@@ -1,25 +1,17 @@
-"""podglad_tagow.py – podgląd z kamery RealSense z wykrytymi AprilTagami (bez robota).
+"""podglad_tagow.py - podgląd z kamery RealSense z wykrytymi tagami, ID i odległością (s zapis, q koniec)."""
+import os
+import time
 
-Uruchom:  python podglad_tagow.py
-Okno pokazuje obraz z kamery, obrysy tagów, ich ID i odległość od kamery.
-Klawisze:  s = zapisz klatkę do zdjecia/,  q = koniec.
-Po co: sprawdzić, czy tagi na kostkach są wykrywane z pozycji HOME i z jakiej odległości przestają być widoczne.
-Przed uruchomieniem zamknij RealSense Viewer (kamerę może używać tylko jeden program naraz).
-Wymaga:  pip install pyrealsense2 opencv-python pupil-apriltags
-"""
-import os                                                    # folder na zapisane klatki
-import time                                                  # licznik klatek/s
-
-import cv2                                                   # obraz, okno, rysowanie
+import cv2
 import numpy as np
-import pupil_apriltags                                       # wykrywanie AprilTagów
-import pyrealsense2 as rs                                    # sterownik kamery
+import pupil_apriltags
+import pyrealsense2 as rs
 
 W, H, FPS = 1280, 720, 30                                    # tryb koloru (sprawdź w profiles.py, czy działa; inaczej 640 x 480)
 EXPOSURE = None                                              # None = automatyczna; liczba (np. 100) = stała, krótka -> mniej rozmyć w ruchu
 # tagi tag36h11, każda ściana kostki ma inne ID:  niebieska 0-5, czerwona 6-11, zielona 12-17;  20 = duży tag do kalibracji
-CUBE_TAG = 0.035                                             # bok CZARNEGO kwadratu tagu na kostce [m] – WPISZ ZMIERZONY
-CALIB_TAG = 0.070                                            # bok CZARNEGO kwadratu tagu ID 20 [m] – WPISZ ZMIERZONY
+CUBE_TAG = 0.035                                             # bok CZARNEGO kwadratu tagu na kostce [m] - WPISZ ZMIERZONY
+CALIB_TAG = 0.070                                            # bok CZARNEGO kwadratu tagu ID 20 [m] - WPISZ ZMIERZONY
 TAG_SIZE = {i: CUBE_TAG for i in range(18)}
 TAG_SIZE[20] = CALIB_TAG
 CUBE_NAME = {i: ("niebieska", "czerwona", "zielona")[i // 6] + f" ściana {i % 6}" for i in range(18)}
@@ -29,7 +21,7 @@ OUT_DIR = "zdjecia"
 # ---------- kamera ----------
 pipe = rs.pipeline()
 cfg = rs.config()
-cfg.enable_stream(rs.stream.color, W, H, rs.format.bgr8, FPS)   # sam kolor – głębia do tagów niepotrzebna
+cfg.enable_stream(rs.stream.color, W, H, rs.format.bgr8, FPS)   # sam kolor - głębia do tagów niepotrzebna
 profile = pipe.start(cfg)
 intr = profile.get_stream(rs.stream.color).as_video_stream_profile().get_intrinsics()
 cam_params = (intr.fx, intr.fy, intr.ppx, intr.ppy)          # parametry kamery z fabrycznej kalibracji RealSense

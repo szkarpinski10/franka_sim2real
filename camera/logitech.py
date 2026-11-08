@@ -1,18 +1,8 @@
-"""logitech.py – kamera Logitech na statywie: otwarcie, obraz bez zniekształceń, wykrywanie tagów.
+"""logitech.py - kamera Logitech na statywie: obraz bez zniekształceń i wykrywanie tagów.
 
-Jako moduł:
-    from logitech import Logitech
-    cam = Logitech()                  # wczytuje logitech.json (z kalibruj_logitech.py)
-    img = cam.klatka()                # obraz już wyprostowany (bez zniekształceń obiektywu)
-    tagi = cam.wykryj(img, 0.035)     # AprilTagi z pozą względem kamery dla tagu o boku 0.035 m
-Jako podgląd / test zasięgu:  python logitech.py
-    pokazuje tagi z ID i pewnością wykrycia; po kalibracji obiektywu także odległość.
-    Postaw kostki w najdalszym miejscu stołu i sprawdź, czy są wykrywane (pewność >= MIN_MARGIN).
-Klawisze:  + / -  ostrość,  s = zapisz klatkę,  q = koniec.
-Pomiar opóźnienia obrazu:  python logitech.py --opoznienie
-    skieruj kamerę na ekran laptopa; okno miga czarne/białe, a skrypt mierzy, po jakim czasie kamera widzi zmianę.
-    Wynik wpisz do OPOZNIENIE_STATYW w kamery.py (zawiera też opóźnienie ekranu, ok. 10-30 ms – lepiej za dużo niż za mało).
-Wymaga:  pip install opencv-python pupil-apriltags
+Podgląd:  python logitech.py   (+/- ostrość, s zapis klatki, q koniec)
+Pomiar opóźnienia obrazu:  python logitech.py --opoznienie   (ekran laptopa przed kamerą miga czarny/biały,
+wynik wpisać do OPOZNIENIE_STATYW w kamery.py)
 """
 import json
 import os
@@ -25,11 +15,10 @@ import pupil_apriltags
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 KALIBRACJA = os.path.join(DIR, "logitech.json")
-INDEKS = "/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_23B315FF-video-index0"   # Logitech C922 (stała nazwa;
-                                                             # numer /dev/videoN zmienia się po przepięciu, RealSense też je zajmuje)
+# stała nazwa urządzenia (numer /dev/videoN zmienia się po przepięciu)
+INDEKS = "/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_23B315FF-video-index0"
 W, H, FPS = 1280, 720, 30
-FOCUS = 0                                                    # stała ostrość (0 = najdalej); DOBIERZ w podglądzie (+ / -)
-                                                             # i NIE ZMIENIAJ po kalibracji obiektywu
+FOCUS = 0                                                    # stała ostrość, nie zmieniać po kalibracji obiektywu
 MIN_MARGIN = 30                                              # słabsze wykrycia odrzucamy (jak w kamera_kostki.py)
 
 
@@ -45,7 +34,7 @@ def otworz():
     cap.set(cv2.CAP_PROP_FOCUS, FOCUS)
     ok, img = cap.read()
     if not ok:
-        raise RuntimeError(f"Nie da się otworzyć kamery {INDEKS} – sprawdź INDEKS (ls /dev/video*)")
+        raise RuntimeError(f"Nie da się otworzyć kamery {INDEKS} - sprawdź INDEKS (ls /dev/video*)")
     if img.shape[1] != W or img.shape[0] != H:
         raise RuntimeError(f"Kamera daje {img.shape[1]} x {img.shape[0]}, a nie {W} x {H}")
     return cap
@@ -90,8 +79,7 @@ class Logitech:
 
 def zmierz_opoznienie(n_zmian=12):
     cap = otworz()
-    # stała ekspozycja tylko na czas pomiaru: auto-ekspozycja wyrównuje jasność czarnego/białego ekranu
-    # i próg 128 łapał zmianę w złym momencie (5.11: tylko 6/12 udanych, min 12 ms < czas klatki)
+    # stała ekspozycja na czas pomiaru (auto-ekspozycja wyrównuje jasność czarnego i białego ekranu)
     cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 1)                   # V4L2: 1 = ręczna, 3 = automatyczna
     cap.set(cv2.CAP_PROP_EXPOSURE, 150)                      # ok. 15 ms (jednostki 0.1 ms)
     cv2.namedWindow("miganie", cv2.WINDOW_NORMAL)
@@ -99,6 +87,20 @@ def zmierz_opoznienie(n_zmian=12):
     wyniki, bialy = [], False
     for _ in range(30):                                      # rozgrzewka: ekspozycja się ustawia
         cap.read()
+
+    def jasnosc_ekranu(kolor):
+        """Średnia jasność obrazu, gdy ekran od 1 s pokazuje dany kolor."""
+        cv2.imshow("miganie", np.full((H, W), kolor, np.uint8))
+        cv2.waitKey(1000)
+        return np.mean([cap.read()[1].mean() for _ in range(10)])
+
+    # próg jasności między czarnym a białym ekranem (ekran nie musi wypełniać kadru)
+    czarny, bialy_poziom = jasnosc_ekranu(0), jasnosc_ekranu(255)
+    if bialy_poziom - czarny < 5:
+        raise SystemExit(f"Kamera prawie nie widzi różnicy czarny/biały ({czarny:.0f} / {bialy_poziom:.0f}) "
+                         "- przybliż ekran laptopa do kamery")
+    prog = (czarny + bialy_poziom) / 2
+    print(f"jasność: czarny ekran {czarny:.0f}, biały {bialy_poziom:.0f}, próg {prog:.0f}")
     for _ in range(n_zmian):
         bialy = not bialy
         cv2.imshow("miganie", np.full((H, W), 255 if bialy else 0, np.uint8))
@@ -107,14 +109,14 @@ def zmierz_opoznienie(n_zmian=12):
         while time.perf_counter() - t_zmiany < 1.0:          # czekamy, aż kamera zobaczy nową jasność
             ok, img = cap.read()
             jasnosc = img.mean()
-            if (bialy and jasnosc > 128) or (not bialy and jasnosc < 128):
+            if (bialy and jasnosc > prog) or (not bialy and jasnosc < prog):
                 wyniki.append(time.perf_counter() - t_zmiany)
                 break
         cv2.waitKey(300)                                     # obraz stoi chwilę, zanim zmienimy
     cap.release()
     cv2.destroyAllWindows()
     if len(wyniki) < n_zmian // 2:
-        raise SystemExit("Kamera nie widzi migania – skieruj ją na ekran (jasność progu 128)")
+        raise SystemExit("Kamera nie widzi migania - przybliż ekran laptopa do kamery")
     print(f"Opóźnienie: mediana {np.median(wyniki) * 1000:.0f} ms, min {min(wyniki) * 1000:.0f}, "
           f"max {max(wyniki) * 1000:.0f} ms  ({len(wyniki)} pomiarów) -> OPOZNIENIE_STATYW w kamery.py")
 
@@ -125,7 +127,7 @@ elif __name__ == "__main__":
     CUBE_TAG, CALIB_TAG = 0.035, 0.070                       # jak w podglad_tagow.py
     cam = Logitech()
     if cam.cam_params is None:
-        print("Brak logitech.json – pokazuję tylko ID tagów (odległość po kalibruj_logitech.py)")
+        print("Brak logitech.json - pokazuję tylko ID tagów (odległość po kalibruj_logitech.py)")
     focus = FOCUS
     os.makedirs(os.path.join(DIR, "zdjecia"), exist_ok=True)
     t0, n = time.time(), 0

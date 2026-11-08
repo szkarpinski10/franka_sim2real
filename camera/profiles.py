@@ -1,16 +1,8 @@
-"""profiles.py – jakie tryby obrazu daje kamera przy obecnym połączeniu i które z nich naprawdę działają.
+"""profiles.py - tryby obrazu, które kamera RealSense zgłasza, i ile klatek naprawdę przychodzi w każdym."""
+import time
+from collections import defaultdict
 
-Uruchom:  python profiles.py
-1. Wypisuje tryby, które kamera zgłasza (rozdzielczość, klatki/s, format). Na USB 2 lista jest krótsza niż na USB 3.
-2. Po kolei włącza głębię i kolor RAZEM w tych samych trybach (tak jak nasze skrypty) i liczy,
-   ile par klatek naprawdę przychodzi w ciągu kilku sekund.
-Przed uruchomieniem zamknij RealSense Viewer i inne skrypty: kamerę może używać tylko jeden program naraz.
-Działa na Windowsie i na Linuksie.
-"""
-import time                                                  # pomiar czasu
-from collections import defaultdict                          # słownik z domyślną wartością
-
-import pyrealsense2 as rs                                    # sterownik kamery
+import pyrealsense2 as rs
 
 TEST_S = 3.0                                                 # ile sekund liczymy klatki w jednym trybie
 FIRST_MS = 5000                                              # ile czekamy na pierwszą klatkę [ms]
@@ -35,7 +27,7 @@ print(f"Kamera: {info(rs.camera_info.name)}   firmware: {info(rs.camera_info.fir
 # ---------- 1. Tryby zgłaszane przez kamerę ----------
 modes = defaultdict(lambda: defaultdict(set))                # strumień -> (w, h) -> zbiór klatek/s
 formats = defaultdict(set)                                   # strumień -> zbiór formatów
-supported = set()                                            # (strumień, format, w, h, fps) – do testu poniżej
+supported = set()                                            # (strumień, format, w, h, fps) - do testu poniżej
 for sensor in dev.query_sensors():
     for p in sensor.get_stream_profiles():
         if not p.is_video_stream_profile():
