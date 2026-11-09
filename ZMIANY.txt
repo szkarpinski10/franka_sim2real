@@ -229,3 +229,9 @@ ZMIANY W KODZIE – dziennik (co, gdzie, dlaczego). Najnowsze na dole.
     proponuje HOME (reset_scene robi recover()); wcześniej robot stojący przy HOME z błędem przerywał epizod w kroku 0.
     Sprawdzone run_robot.py (menu) z udawanym robotem/chwytakiem/kamerami: tryb w powietrzu wł./wył., odruch w trakcie
     p1 (wykryty, log), HOME, [3] nie przechodzi do p2 po nieudanym p1, set_filter 0.05, progi kolizji 10/20, pętla 60 ms.
+
+38. FILTR_CELU 0.05 zostaje dla nowy_B (w treningu wygładzania NIE było, skala akcji 0.03 i obserwacja bez zmian –
+    wg autora na ok. 90%; rozmiary sprawdzone na plikach: obie policy 78 wejść, 8 wyjść).
+    MuJoCo (test_plynnosc.py --robot, 30 układów, policy1 nowy_B): filtr 0.05 -> 28/30 wież, 0/30 kontaktów ze stołem,
+    przyspieszenia stawów 99% < 10.3 rad/s2; bez filtra -> 27/30, 4/30 kontaktów, 54 rad/s2 (cel skacze co 60 ms –
+    samo wolniejsze tempo nie usuwa szarpania). Przy następnym treningu: wygładzanie celu także w Isaacu.
