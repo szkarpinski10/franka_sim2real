@@ -42,6 +42,7 @@ ap.add_argument("--p2", action="store_true", help="policy2: start z wieżą czer
 ap.add_argument("--v-palcow", type=float, default=None, help="prędkość jednego palca [m/s] (domyślnie 0.03 jak w treningu nowy_B)")
 ap.add_argument("--policy2", default=None, help="cała sekwencja: po --policy ramię do HOME i ta policy")
 ap.add_argument("--kamery", action="store_true", help="kostki z fuzji udawanych kamer zamiast prawdziwych")
+ap.add_argument("--bez-reki", action="store_true", help="z --kamery: tylko statyw (bez kamery na chwytaku)")
 args = ap.parse_args()
 
 SCALE = 0.03
@@ -109,7 +110,7 @@ def udawane_kamery(fuzja, historia, krok, trzymana, trzyma_teraz):
     for k, (pos, yaw) in kostki.items():
         pomiar = (pos + rng_kam.normal(0, 0.003, 3), yaw + rng_kam.normal(0, np.radians(2)))
         w_chwytaku = k == trzymana and trzyma_teraz
-        if v_tcp < 0.05 and np.linalg.norm(pos[:2] - T_tcp[:2, 3]) < 0.2 and not w_chwytaku:
+        if not args.bez_reki and v_tcp < 0.05 and np.linalg.norm(pos[:2] - T_tcp[:2, 3]) < 0.2 and not w_chwytaku:
             fuzja.dodaj("reka", k, *pomiar, t, T_tcp)          # kamera na chwytaku: wolny ruch, kostka pod nią
         if rng_kam.random() < (0.6 if w_chwytaku else 0.85):   # statyw: czasem zasłonięty przez ramię
             fuzja.dodaj("statyw", k, *pomiar, t, T_tcp)
@@ -220,6 +221,6 @@ V, A = np.concatenate(V), np.concatenate(A)
 if policy2 is not None:
     print(f"policy1: {p1_udane}/{args.n}, policy2 po udanej policy1: {wieze}/{p1_udane}", flush=True)
 print(f"dt {args.dt * 1000:.0f} ms, vel {args.vel:.3f}, obs x{args.obs_skala:g}, filtr {args.filtr}, robot {args.robot}, "
-      f"kamery {args.kamery}: wieże {wieze}/{args.n}, kontakt ze stołem {kontakty}/{args.n} | stawy 99%: prędkość "
+      f"kamery {args.kamery}{' (bez ręki)' if args.bez_reki else ''}: wieże {wieze}/{args.n}, kontakt ze stołem {kontakty}/{args.n} | stawy 99%: prędkość "
       f"{np.percentile(V, 99):.2f} rad/s, przyspieszenie {np.percentile(A, 99):.1f} rad/s2 | równość ruchu w kroku "
       f"{np.mean(R):.2f}", flush=True)
