@@ -217,3 +217,15 @@ ZMIANY W KODZIE – dziennik (co, gdzie, dlaczego). Najnowsze na dole.
 
 36. Porządki: usunięte camera/do_home.py (menu h w run_robot), robot_p1_p2.py i test_kamery_sim.py (zastąpione
     opcjami --policy2 i --kamery w test_plynnosc.py), stare modele; komentarze w kodzie skrócone, historie tutaj.
+
+    Uwaga do porównania prób z 5.11 (filmy IMG_9056 – 1. próba, IMG_9059 – 2. próba): użytkownik po obejrzeniu –
+    pierwsza próba NA PEWNO mniej szarpała, ale między próbami zmieniło się chyba ustawienie kostek, więc
+    porównanie nie jest 1:1. Następnym razem: przy TYM SAMYM układzie kostek co w 1. próbie i film.
+
+37. (przegląd kodu 9.11) franka_mujoco/test_plynnosc.py – domyślne opcje pod model nowy_B (policy 2026-11-05_18-04-46_2499,
+    vel 0.3, obs-skala 1, filtr 0.05, palec 0.03 m/s); wcześniej domyślne były jeszcze ze starego modelu (obs-skala 3,
+    vel 0.267, bez filtra) – wyniki z 28-35 liczone z jawnymi opcjami, więc są dobre, ale łatwo się było pomylić.
+    franka_mujoco/robot_franka.py – ma_blad(); run_robot.py – przed epizodem z aktywnym błędem robota (np. po odruchu)
+    proponuje HOME (reset_scene robi recover()); wcześniej robot stojący przy HOME z błędem przerywał epizod w kroku 0.
+    Sprawdzone run_robot.py (menu) z udawanym robotem/chwytakiem/kamerami: tryb w powietrzu wł./wył., odruch w trakcie
+    p1 (wykryty, log), HOME, [3] nie przechodzi do p2 po nieudanym p1, set_filter 0.05, progi kolizji 10/20, pętla 60 ms.

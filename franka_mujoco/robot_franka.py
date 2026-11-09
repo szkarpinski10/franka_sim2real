@@ -140,6 +140,15 @@ def robot_stop():
         ctrl = None
 
 
+def ma_blad():
+    """Czy robot ma aktywny błąd (np. po odruchu) – wtedy przed ruchem trzeba recover() (robi to reset_scene)."""
+    try:
+        panda.raise_error()
+    except RuntimeError:
+        return True
+    return False
+
+
 def robot_ok():
     """False, gdy robot stanął (błąd, odruch, stop). panda_py sam nie zgłasza błędów sterownika."""
     global ostatni_blad

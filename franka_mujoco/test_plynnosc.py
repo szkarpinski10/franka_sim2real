@@ -30,16 +30,16 @@ from fuzja import Fuzja, poza, trzyma
 from observations_combine import obs_combine
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--policy", default="policy1/2026-11-01_16-15-43_800/exported/policy.pt")
+ap.add_argument("--policy", default="policy1/2026-11-05_18-04-46_2499/exported/policy.pt")
 ap.add_argument("--dt", type=float, default=0.06)
-ap.add_argument("--vel", type=float, default=0.8 / 3)
-ap.add_argument("--obs-skala", type=float, default=3.0)
-ap.add_argument("--filtr", default="1")
+ap.add_argument("--vel", type=float, default=0.3)
+ap.add_argument("--obs-skala", type=float, default=1.0)
+ap.add_argument("--filtr", default="0.05")
 ap.add_argument("--robot", action="store_true")
 ap.add_argument("--n", type=int, default=30)
 ap.add_argument("--seed", type=int, default=11)
 ap.add_argument("--p2", action="store_true", help="policy2: start z wieżą czerwona na niebieskiej, sukces = zielona na czerwonej")
-ap.add_argument("--v-palcow", type=float, default=None, help="prędkość jednego palca [m/s] (domyślnie 0.05 * vel / 0.8)")
+ap.add_argument("--v-palcow", type=float, default=None, help="prędkość jednego palca [m/s] (domyślnie 0.03 jak w treningu nowy_B)")
 ap.add_argument("--policy2", default=None, help="cała sekwencja: po --policy ramię do HOME i ta policy")
 ap.add_argument("--kamery", action="store_true", help="kostki z fuzji udawanych kamer zamiast prawdziwych")
 args = ap.parse_args()
@@ -47,7 +47,7 @@ args = ap.parse_args()
 SCALE = 0.03
 N_STEPS = 1000
 P_STEP = int(round(args.dt / robot.SIM_DT))
-v_palca = args.v_palcow if args.v_palcow is not None else 0.05 * args.vel / 0.8   # palce zwalniają jak stawy
+v_palca = args.v_palcow if args.v_palcow is not None else 0.03            # jak robot_franka.V_PALCOW / 2
 policy = torch.jit.load(args.policy, map_location="cpu").eval()
 policy2 = torch.jit.load(args.policy2, map_location="cpu").eval() if args.policy2 else None
 KAMERA_CO, KAMERA_OPOZN = 2, 2                                # klatka co 2 kroki, opóźnienie 2 kroki (120 ms)

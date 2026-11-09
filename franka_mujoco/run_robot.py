@@ -94,7 +94,7 @@ def zapisz_log(log, nazwa):
 def epizod(nazwa):
     """Jedna policy od HOME do postawionej wieży (albo końca czasu). Zwraca True, gdy wieża stoi."""
     p = POLICY[nazwa]
-    if not w_home() and not do_home():
+    if (robot.ma_blad() or not w_home()) and not do_home():  # błąd po odruchu kasuje dopiero reset_scene
         return False
     kamery.fuzja = Fuzja(p["gorna"])                       # nowa fuzja: tylko świeże pomiary, właściwa kostka w chwytaku
     kostki = czekaj_na_kostki()
