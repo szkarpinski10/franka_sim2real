@@ -12,6 +12,9 @@ Parametry:
     --p2          sama policy2: start z czerwoną na niebieskiej
     --policy2     cała sekwencja: --policy, HOME, --policy2
     --kamery      kostki z fuzja.py i udawanych kamer (co 120 ms, opóźnienie 120 ms, szum 3 mm / 2 st.)
+    --podglad     okno MuJoCo, ruch w czasie rzeczywistym
+    --uklady      tylko wybrane układy (numery od 1, jak w wydruku), np. --uklady 7,23
+    --x, --y      zakres losowania kostek [m] (domyślnie stary 0.35-0.55 / -0.2-0.2; nowy trening: --x 0.25 0.70 --y -0.25 0.25)
 Wynik: wieże, kontakt ze stołem, prędkość i przyspieszenie stawów (99%), równość ruchu w kroku (1 = równo).
 """
 import argparse
@@ -42,7 +45,16 @@ ap.add_argument("--p2", action="store_true", help="policy2: start z wieżą czer
 ap.add_argument("--v-palcow", type=float, default=None, help="prędkość jednego palca [m/s] (domyślnie 0.05 * vel / 0.8)")
 ap.add_argument("--policy2", default=None, help="cała sekwencja: po --policy ramię do HOME i ta policy")
 ap.add_argument("--kamery", action="store_true", help="kostki z fuzji udawanych kamer zamiast prawdziwych")
+ap.add_argument("--x", type=float, nargs=2, default=[0.35, 0.55], help="zakres losowania kostek w x [m], jak w treningu")
+ap.add_argument("--y", type=float, nargs=2, default=[-0.20, 0.20], help="zakres losowania kostek w y [m], jak w treningu")
+ap.add_argument("--podglad", action="store_true", help="okno MuJoCo, ruch w czasie rzeczywistym")
+ap.add_argument("--uklady", default=None, help="tylko te układy (numery od 1), np. 7,23")
 args = ap.parse_args()
+podglad = None
+if args.podglad:
+    import time
+    import mujoco.viewer
+    podglad = mujoco.viewer.launch_passive(robot.model, robot.data)
 
 SCALE = 0.03
 N_STEPS = 1000
@@ -67,7 +79,7 @@ def uklady(n, seed):
     r = np.random.default_rng(seed)
     out = []
     while len(out) < n:
-        x, y = r.uniform(0.35, 0.55, 3), r.uniform(-0.2, 0.2, 3)
+        x, y = r.uniform(*args.x, 3), r.uniform(*args.y, 3)
         if min(np.hypot(x[0] - x[1], y[0] - y[1]), np.hypot(x[1] - x[2], y[1] - y[2]),
                np.hypot(x[0] - x[2], y[0] - y[2])) < 0.1:
             continue
@@ -169,6 +181,9 @@ def epizod(policy, trzymana="cube_2"):
             d.ctrl[7] = chwytak_cel
             przed = d.qpos[7:9].copy()
             mujoco.mj_step(robot.model, d)
+            if podglad is not None and i % 40 == 0:          # co 20 ms obraz i czekanie do czasu rzeczywistego
+                podglad.sync()
+                time.sleep(0.02)
             lim = v_palca * robot.SIM_DT
             d.qpos[7:9] = przed + np.clip(d.qpos[7:9] - przed, -lim, lim)
             d.qvel[7:9] = np.clip(d.qvel[7:9], -v_palca, v_palca)
@@ -204,7 +219,10 @@ def do_home():
 
 wieze = kontakty = p1_udane = 0
 V, A, R = [], [], []
-for case in uklady(args.n, args.seed):
+wybrane = None if args.uklady is None else {int(x) for x in args.uklady.split(",")}
+for nr, case in enumerate(uklady(args.n, args.seed), 1):
+    if wybrane is not None and nr not in wybrane:
+        continue
     robot.reset_scene(case)
     s, k, v, a, r = epizod(policy, "cube_3" if args.p2 else "cube_2")
     if policy2 is not None and s:                             # policy1 postawiła czerwoną -> policy2
@@ -213,6 +231,8 @@ for case in uklady(args.n, args.seed):
         _, k2, v2, a2, r2 = epizod(policy2, "cube_3")
         s = na_sobie("cube_1", "cube_2") and na_sobie("cube_2", "cube_3")
         k, v, a, r = k or k2, np.concatenate([v, v2]), np.concatenate([a, a2]), r + r2
+    if podglad is not None or wybrane is not None:
+        print(f"układ {nr}: {'wieża' if s else 'PORAŻKA'}{', kontakt ze stołem' if k else ''}", flush=True)
     wieze += s
     kontakty += k
     V.append(v); A.append(a); R += r

@@ -31,8 +31,8 @@ POWIETRZE = 0.05                   # [m] o tyle filtr podnosi stół w trybie w 
 
 # obie policy mają te same ustawienia ruchu (stałe w robot_franka.py)
 POLICY = {
-    "p1": dict(plik="policy1/2026-11-05_18-04-46_2499/exported/policy.pt", dolna="cube_1", gorna="cube_2"),
-    "p2": dict(plik="policy2/2026-11-06_19-01-50_3200/exported/policy.pt", dolna="cube_2", gorna="cube_3"),
+    "p1": dict(plik="policy1/2026-11-14_10-54-59_3250/exported/policy.pt", dolna="cube_1", gorna="cube_2"),
+    "p2": dict(plik="policy2/2026-11-15_13-55-00_2700/exported/policy.pt", dolna="cube_2", gorna="cube_3"),
 }
 for p in POLICY.values():
     p["model"] = torch.jit.load(os.path.join(DIR, p["plik"]), map_location="cpu").eval()
