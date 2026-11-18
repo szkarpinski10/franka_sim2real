@@ -1,8 +1,8 @@
 """test_plynnosc.py - skuteczność i płynność policy w MuJoCo przy sterowaniu jak na robocie (robot_franka.movement).
 
 Przykład (cała sekwencja, kostki z udawanych kamer, wersja najbliższa robotowi):
-    python test_plynnosc.py --policy policy1/2026-11-05_18-04-46_2499/exported/policy.pt \
-        --policy2 policy2/2026-11-06_19-01-50_3200/exported/policy.pt --dt 0.06 --vel 0.3 --obs-skala 1 \
+    python test_plynnosc.py --policy policy1/2026-11-14_10-54-59_3250/exported/policy.pt \
+        --policy2 policy2/2026-11-15_13-55-00_2700/exported/policy.pt --dt 0.06 --vel 0.3 --obs-skala 1 \
         --v-palcow 0.03 --filtr 0.05 --robot --kamery --n 100
 Parametry:
     --dt, --vel   krok policy [s] i największa prędkość stawu [rad/s]
@@ -33,7 +33,7 @@ from fuzja import Fuzja, poza, trzyma
 from observations_combine import obs_combine
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--policy", default="policy1/2026-11-01_16-15-43_800/exported/policy.pt")
+ap.add_argument("--policy", default="policy1/2026-11-14_10-54-59_3250/exported/policy.pt")
 ap.add_argument("--dt", type=float, default=0.06)
 ap.add_argument("--vel", type=float, default=0.8 / 3)
 ap.add_argument("--obs-skala", type=float, default=3.0)
