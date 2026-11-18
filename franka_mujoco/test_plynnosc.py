@@ -35,20 +35,21 @@ from observations_combine import obs_combine
 ap = argparse.ArgumentParser()
 ap.add_argument("--policy", default="policy1/2026-11-14_10-54-59_3250/exported/policy.pt")
 ap.add_argument("--dt", type=float, default=0.06)
-ap.add_argument("--vel", type=float, default=0.8 / 3)
-ap.add_argument("--obs-skala", type=float, default=3.0)
-ap.add_argument("--filtr", default="1")
+ap.add_argument("--vel", type=float, default=0.3)
+ap.add_argument("--obs-skala", type=float, default=1.0)
+ap.add_argument("--filtr", default="0.05")
 ap.add_argument("--robot", action="store_true")
 ap.add_argument("--n", type=int, default=30)
 ap.add_argument("--seed", type=int, default=11)
 ap.add_argument("--p2", action="store_true", help="policy2: start z wieżą czerwona na niebieskiej, sukces = zielona na czerwonej")
-ap.add_argument("--v-palcow", type=float, default=None, help="prędkość jednego palca [m/s] (domyślnie 0.05 * vel / 0.8)")
+ap.add_argument("--v-palcow", type=float, default=None, help="prędkość jednego palca [m/s] (domyślnie 0.03 jak w treningu nowy_B)")
 ap.add_argument("--policy2", default=None, help="cała sekwencja: po --policy ramię do HOME i ta policy")
 ap.add_argument("--kamery", action="store_true", help="kostki z fuzji udawanych kamer zamiast prawdziwych")
 ap.add_argument("--x", type=float, nargs=2, default=[0.35, 0.55], help="zakres losowania kostek w x [m], jak w treningu")
 ap.add_argument("--y", type=float, nargs=2, default=[-0.20, 0.20], help="zakres losowania kostek w y [m], jak w treningu")
 ap.add_argument("--podglad", action="store_true", help="okno MuJoCo, ruch w czasie rzeczywistym")
 ap.add_argument("--uklady", default=None, help="tylko te układy (numery od 1), np. 7,23")
+ap.add_argument("--bez-reki", action="store_true", help="z --kamery: tylko statyw (bez kamery na chwytaku)")
 args = ap.parse_args()
 podglad = None
 if args.podglad:
@@ -59,7 +60,7 @@ if args.podglad:
 SCALE = 0.03
 N_STEPS = 1000
 P_STEP = int(round(args.dt / robot.SIM_DT))
-v_palca = args.v_palcow if args.v_palcow is not None else 0.05 * args.vel / 0.8   # palce zwalniają jak stawy
+v_palca = args.v_palcow if args.v_palcow is not None else 0.03            # jak robot_franka.V_PALCOW / 2
 policy = torch.jit.load(args.policy, map_location="cpu").eval()
 policy2 = torch.jit.load(args.policy2, map_location="cpu").eval() if args.policy2 else None
 KAMERA_CO, KAMERA_OPOZN = 2, 2                                # klatka co 2 kroki, opóźnienie 2 kroki (120 ms)
@@ -121,7 +122,7 @@ def udawane_kamery(fuzja, historia, krok, trzymana, trzyma_teraz):
     for k, (pos, yaw) in kostki.items():
         pomiar = (pos + rng_kam.normal(0, 0.003, 3), yaw + rng_kam.normal(0, np.radians(2)))
         w_chwytaku = k == trzymana and trzyma_teraz
-        if v_tcp < 0.05 and np.linalg.norm(pos[:2] - T_tcp[:2, 3]) < 0.2 and not w_chwytaku:
+        if not args.bez_reki and v_tcp < 0.05 and np.linalg.norm(pos[:2] - T_tcp[:2, 3]) < 0.2 and not w_chwytaku:
             fuzja.dodaj("reka", k, *pomiar, t, T_tcp)          # kamera na chwytaku: wolny ruch, kostka pod nią
         if rng_kam.random() < (0.6 if w_chwytaku else 0.85):   # statyw: czasem zasłonięty przez ramię
             fuzja.dodaj("statyw", k, *pomiar, t, T_tcp)
@@ -240,6 +241,6 @@ V, A = np.concatenate(V), np.concatenate(A)
 if policy2 is not None:
     print(f"policy1: {p1_udane}/{args.n}, policy2 po udanej policy1: {wieze}/{p1_udane}", flush=True)
 print(f"dt {args.dt * 1000:.0f} ms, vel {args.vel:.3f}, obs x{args.obs_skala:g}, filtr {args.filtr}, robot {args.robot}, "
-      f"kamery {args.kamery}: wieże {wieze}/{args.n}, kontakt ze stołem {kontakty}/{args.n} | stawy 99%: prędkość "
+      f"kamery {args.kamery}{' (bez ręki)' if args.bez_reki else ''}: wieże {wieze}/{args.n}, kontakt ze stołem {kontakty}/{args.n} | stawy 99%: prędkość "
       f"{np.percentile(V, 99):.2f} rad/s, przyspieszenie {np.percentile(A, 99):.1f} rad/s2 | równość ruchu w kroku "
       f"{np.mean(R):.2f}", flush=True)
