@@ -49,6 +49,7 @@ ap.add_argument("--x", type=float, nargs=2, default=[0.35, 0.55], help="zakres l
 ap.add_argument("--y", type=float, nargs=2, default=[-0.20, 0.20], help="zakres losowania kostek w y [m], jak w treningu")
 ap.add_argument("--podglad", action="store_true", help="okno MuJoCo, ruch w czasie rzeczywistym")
 ap.add_argument("--uklady", default=None, help="tylko te układy (numery od 1), np. 7,23")
+ap.add_argument("--przesun-x", type=float, default=0.0, help="[cm] czerwona podawana policy tyle dalej w x, dopóki leży na stole (jak na robocie)")
 ap.add_argument("--bez-reki", action="store_true", help="z --kamery: tylko statyw (bez kamery na chwytaku)")
 args = ap.parse_args()
 podglad = None
@@ -137,6 +138,8 @@ def epizod(policy, trzymana="cube_2"):
     chwytak_cel, chwytak_kolejka = 0.04, []                   # (czas wykonania, cel) - opóźnienie komendy chwytaka
     palec_obs, palec_obs_t, palec_v = float(d.qpos[7]), 0.0, 0.0
     t, kontakt = 0.0, False
+    global na_wierzchu
+    na_wierzchu = False
     v_zapis, rownosc = [], []
     for krok in range(N_STEPS):
         s = robot.state()
@@ -157,6 +160,13 @@ def epizod(policy, trzymana="cube_2"):
             z_fuzji = fuzja.kostki(T_tcp, trzyma_teraz, krok * args.dt)
             if z_fuzji is not None:                           # na robocie czeka na to czekaj_na_kostki
                 kostki = z_fuzji
+        if args.przesun_x and kostki["cube_2"][0][2] < 0.04:    # przed chwytem: cel dalej od robota
+            kostki = dict(kostki)
+            kostki["cube_2"] = (kostki["cube_2"][0] + np.array([args.przesun_x / 100, 0.0, 0.0]), kostki["cube_2"][1])
+        for c in d.contact[:d.ncon]:                          # palec na wierzchu czerwonej (robot by stanął)
+            b = {robot.model.body(robot.model.geom_bodyid[c.geom1]).name, robot.model.body(robot.model.geom_bodyid[c.geom2]).name}
+            if "cube_2" in b and b & {"left_finger", "right_finger"} and abs(c.frame[2]) > 0.8 and d.body("cube_2").xpos[2] < 0.04:
+                na_wierzchu = True
         obs = obs_combine(s["q"], s["q_vel"] * args.obs_skala, fingers, fingers_vel * args.obs_skala, la,
                           s["tcp_pos"], s["tcp_quat"], kostki)
         with torch.no_grad():
@@ -218,7 +228,7 @@ def do_home():
     mujoco.mj_forward(robot.model, d)
 
 
-wieze = kontakty = p1_udane = 0
+wieze = kontakty = p1_udane = wierzch = wierzch_ok = 0
 V, A, R = [], [], []
 wybrane = None if args.uklady is None else {int(x) for x in args.uklady.split(",")}
 for nr, case in enumerate(uklady(args.n, args.seed), 1):
@@ -236,6 +246,9 @@ for nr, case in enumerate(uklady(args.n, args.seed), 1):
         print(f"układ {nr}: {'wieża' if s else 'PORAŻKA'}{', kontakt ze stołem' if k else ''}", flush=True)
     wieze += s
     kontakty += k
+    wierzch += na_wierzchu
+    wierzch_ok += na_wierzchu and s
+    print(f"  epizod {len(V) + 1}: wieża {int(s)}, palec na wierzchu {int(na_wierzchu)}", flush=True)
     V.append(v); A.append(a); R += r
 V, A = np.concatenate(V), np.concatenate(A)
 if policy2 is not None:
@@ -244,3 +257,5 @@ print(f"dt {args.dt * 1000:.0f} ms, vel {args.vel:.3f}, obs x{args.obs_skala:g},
       f"kamery {args.kamery}{' (bez ręki)' if args.bez_reki else ''}: wieże {wieze}/{args.n}, kontakt ze stołem {kontakty}/{args.n} | stawy 99%: prędkość "
       f"{np.percentile(V, 99):.2f} rad/s, przyspieszenie {np.percentile(A, 99):.1f} rad/s2 | równość ruchu w kroku "
       f"{np.mean(R):.2f}", flush=True)
+print(f"przesunięcie x {args.przesun_x:g} cm: palec na wierzchu czerwonej (robot by stanął) w {wierzch}/{args.n} "
+      f"epizodach (z nich wieża mimo to: {wierzch_ok})", flush=True)

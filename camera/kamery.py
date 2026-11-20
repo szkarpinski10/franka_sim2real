@@ -21,7 +21,7 @@ W_MAX_REKA = 0.3                                             # [rad/s] tak samo 
 POZA_SWIEZA = 0.05                                           # [s] brak pozy TCP tak blisko chwili zdjęcia -> pomijamy
 # opóźnienie obrazu: od zdjęcia do odebrania klatki
 OPOZNIENIE_REKA = 0.06                                       # [s] tylko gdy RealSense nie poda czasu zdjęcia
-OPOZNIENIE_STATYW = 0.12                                     # [s] do zmierzenia: python logitech.py --opoznienie
+OPOZNIENIE_STATYW = 0.10                                     # [s] pomiar 12.11: mediana 97 ms (12/12 udanych, z opóźnieniem ekranu)
 
 
 class Kamery:

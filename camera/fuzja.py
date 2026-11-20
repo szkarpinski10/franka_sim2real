@@ -13,6 +13,10 @@ KOSTKI = ("cube_1", "cube_2", "cube_3")
 SWIEZY = 0.3                                                 # [s] pomiar starszy od tego nie jest już "świeży"
 NIEZGODNE = 0.015                                            # [m] tyle mogą się różnić kamery, zanim uznamy, że coś nie tak
 PO_CHWYCIE = 0.1                                             # [s] po zamknięciu palców kostka jeszcze się układa
+# kostka, której robot nie trzyma, leży na stole albo na innej kostce: środek na jednym z tych poziomów
+POZIOMY_Z = (0.025, 0.075, 0.125)                            # [m]
+TOL_Z = 0.015                                                # [m] dalej od poziomu -> pomiar odrzucony (12.11: niebieska
+                                                             # pod czerwoną odczytana 3.7 cm obok i 0.7 cm POD stołem)
 SKOK = 0.03                                                  # [m] dalej od ostatniej pozycji -> czekamy na potwierdzenie
 # kostka wygląda tak samo co 90 st., więc obrót podajemy w przedziale [45, 135) st. (z nim policy działa najlepiej)
 YAW_OD = np.radians(45)
@@ -74,6 +78,7 @@ class Fuzja:
         self.n_niezgodnych = 0                               # do logów: ile razy kamery się nie zgodziły
         self.kandydat = {}                                   # kostka -> (t, pos) - skok czekający na potwierdzenie
         self.n_odrzuconych = 0                               # do logów: ile pojedynczych skoków odrzucono
+        self.n_zla_wysokosc = 0                              # do logów: pomiary z niemożliwą wysokością
         self.t_puszczenia = None                             # chwila puszczenia kostki (skok z "w chwytaku" na pomiar)
 
     def dodaj(self, kamera, kostka, pos, yaw, t, T_base_tcp=None):
@@ -103,6 +108,9 @@ class Fuzja:
                         self.t_puszczenia = teraz
                     self.offset, self.t_chwytu = None, None
                 m = self.swieze(kostka, teraz)
+                dobre = {k: v for k, v in m.items() if min(abs(v[1][2] - p) for p in POZIOMY_Z) < TOL_Z}
+                self.n_zla_wysokosc += len(m) - len(dobre)
+                m = dobre
                 zgodne_obie = False                              # obie kamery widzą to samo -> skok bez potwierdzenia
                 if len(m) == 2:
                     zgodne_obie = np.linalg.norm(m["reka"][1] - m["statyw"][1]) <= NIEZGODNE

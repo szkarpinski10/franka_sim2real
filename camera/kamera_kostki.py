@@ -16,7 +16,10 @@ import pyrealsense2 as rs
 from fuzja import usrednij_yaw, yaw_to_quat
 
 DIR = os.path.dirname(os.path.abspath(__file__))
-W, H, FPS = 1280, 720, 30                                    # ten sam tryb co przy kalibracji (zbierz_handeye.py)
+W, H = 1280, 720                                             # ten sam tryb co przy kalibracji (zbierz_handeye.py)
+# na USB 2 (np. hub z dwiema kamerami) RealSense nie da 1280 x 720 przy 30 kl/s – wtedy: REALSENSE_FPS=15 python ...
+# (ta sama rozdzielczość, więc kalibracja hand-eye zostaje ważna)
+FPS = int(os.environ.get("REALSENSE_FPS", 30))
 EXPOSURE = None                                              # None = automatyczna
 CUBE_TAG = 0.035                                             # bok czarnego kwadratu tagu na kostce [m]
 HALF = 0.025                                                 # pół boku kostki [m]

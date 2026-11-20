@@ -31,7 +31,7 @@ POWIETRZE = 0.05                   # [m] o tyle filtr podnosi stół w trybie w 
 
 # obie policy mają te same ustawienia ruchu (stałe w robot_franka.py)
 POLICY = {
-    "p1": dict(plik="policy1/2026-11-14_10-54-59_3250/exported/policy.pt", dolna="cube_1", gorna="cube_2"),
+    "p1": dict(plik="policy1/2026-11-05_18-04-46_2499/exported/policy.pt", dolna="cube_1", gorna="cube_2"),
     "p2": dict(plik="policy2/2026-11-15_13-55-00_2700/exported/policy.pt", dolna="cube_2", gorna="cube_3"),
 }
 for p in POLICY.values():
@@ -43,7 +43,7 @@ def pytaj(tekst):
 
 
 def trzyma(s):
-    return trzyma_kostke(not robot.chwytak_otwarty(), s["fingers"], s["fingers_vel"])
+    return trzyma_kostke(robot.chwytak_zamkniety(), s["fingers"], s["fingers_vel"])
 
 
 def na_sobie(kostki, dolna, gorna, xy=0.02):
@@ -143,18 +143,26 @@ def epizod(nazwa):
         if len(kroki):
             print(f"Krok pętli: średnio {kroki.mean() * 1000:.1f} ms, max {kroki.max() * 1000:.1f} ms "
                   f"(powinno być {robot.DT * 1000:.0f})")
-        print(f"Niezgodności kamer: {kamery.fuzja.n_niezgodnych}, odrzucone skoki: {kamery.fuzja.n_odrzuconych}")
+        print(f"Niezgodności kamer: {kamery.fuzja.n_niezgodnych}, odrzucone skoki: {kamery.fuzja.n_odrzuconych}, "
+              f"odrzucone niemożliwe wysokości: {kamery.fuzja.n_zla_wysokosc}")
         zapisz_log(log, nazwa)
     return sukces
 
 
-MENU = "\n[h] HOME   [1] policy1   [2] policy2   [3] policy1 + policy2   [p] w powietrzu: {}   [q] koniec\n> "
+MENU = ("\n[h] HOME   [1] policy1   [2] policy2   [3] policy1 + policy2   [p] w powietrzu: {}   "
+        "[w] najniżej palce: {:.1f} cm   [q] koniec\n> ")
+STOL_Z = robot.filtr.stol_z                                  # prawdziwa wysokość blatu (z kalibracji)
 
-kamery = Kamery()
+
+def najnizej():
+    """Na jakiej wysokości nad bazą filtr zatrzyma palce i kamery [m]."""
+    return robot.filtr.stol_z + robot.filtr.h_min
+
+kamery = Kamery(reka=False)                                  # tylko statyw (12.11: kamera na chwytaku z ~17 cm myliła się o 2.5-4.5 cm)
 powietrze = False
 try:
     while True:
-        wybor = input(MENU.format("WŁ." if powietrze else "wył.")).strip().lower()
+        wybor = input(MENU.format("WŁ." if powietrze else "wył.", najnizej() * 100)).strip().lower()
         if wybor == "h":
             do_home()
         elif wybor == "1":
@@ -164,10 +172,20 @@ try:
         elif wybor == "3":
             if epizod("p1") and do_home():
                 epizod("p2")
-        elif wybor == "p":
+        elif wybor == "w":                                   # stopniowe schodzenie do kostki: 7 -> 5.5 -> 4 -> 3 -> 2 cm
+            try:
+                cm = float(input("Najniżej palce i kamery [cm nad blatem], np. 5.5 (najmniej 2): ").replace(",", "."))
+            except ValueError:
+                print("To nie liczba - bez zmian")
+                continue
+            cm = max(cm, robot.filtr.h_min * 100)            # niżej niż h_min (2 cm) filtr nie pozwala
+            robot.filtr.stol_z = STOL_Z + cm / 100 - robot.filtr.h_min
+            powietrze = cm >= 7.0
+            print(f"Filtr: palce i kamery najniżej {najnizej() * 100:.1f} cm nad blatem")
+        elif wybor == "p":                                   # wł.: stół 5 cm wyżej (palce najniżej 7 cm), wył.: normalnie
             powietrze = not powietrze
-            robot.filtr.stol_z += POWIETRZE if powietrze else -POWIETRZE
-            print(f"Filtr: palce i kamery najniżej {(robot.filtr.stol_z + robot.filtr.h_min) * 100:.1f} cm nad bazą")
+            robot.filtr.stol_z = STOL_Z + (POWIETRZE if powietrze else 0.0)
+            print(f"Filtr: palce i kamery najniżej {najnizej() * 100:.1f} cm nad blatem")
         elif wybor == "q":
             break
 finally:
